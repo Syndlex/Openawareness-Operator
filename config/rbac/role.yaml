@@ -1,0 +1,58 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - monitoring.coreos.com.my.domain
+  resources:
+  - prometheusrules
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com.my.domain
+  resources:
+  - prometheusrules/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - monitoring.coreos.com.my.domain
+  resources:
+  - prometheusrules/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - openawareness.my.domain
+  resources:
+  - clientconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openawareness.my.domain
+  resources:
+  - clientconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - openawareness.my.domain
+  resources:
+  - clientconfigs/status
+  verbs:
+  - get
+  - patch
+  - update

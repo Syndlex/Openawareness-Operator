@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  annotations:
+    openawareness.io/client-name: "clientconfig-sample"
+  labels:
+    prometheus: example
+    role: alert-rules
+  name: prometheus-example-rules
+spec:
+  groups:
+    - name: example.rules
+      rules:
+        - alert: MyAlertName
+          expr: up == 0
+          labels:
+            severity: warning
+        - expr: up == 1
+          record: MyRecord
