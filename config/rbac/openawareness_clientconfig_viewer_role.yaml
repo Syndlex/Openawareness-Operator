@@ -8,7 +8,7 @@ metadata:
   name: openawareness-clientconfig-viewer-role
 rules:
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs
   verbs:
@@ -16,7 +16,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs/status
   verbs:

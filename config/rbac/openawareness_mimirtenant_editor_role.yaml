@@ -1,16 +1,16 @@
-# permissions for end users to edit clientconfigs.
+# permissions for end users to edit mimirtenants.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: openawareness-controller
     app.kubernetes.io/managed-by: kustomize
-  name: openawareness-clientconfig-editor-role
+  name: openawareness-mimirtenant-editor-role
 rules:
 - apiGroups:
   - openawareness.syndlex
   resources:
-  - clientconfigs
+  - mimirtenants
   verbs:
   - create
   - delete
@@ -22,6 +22,6 @@ rules:
 - apiGroups:
   - openawareness.syndlex
   resources:
-  - clientconfigs/status
+  - mimirtenants/status
   verbs:
   - get

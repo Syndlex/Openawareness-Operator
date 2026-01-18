@@ -1,11 +1,9 @@
 apiVersion: openawareness.syndlex/v1beta1
-kind: ClientConfig
+kind: MimirTenant
 metadata:
   labels:
     app.kubernetes.io/name: openawareness-controller
     app.kubernetes.io/managed-by: kustomize
-  name: clientconfig-sample
+  name: mimirtenant-sample
 spec:
-  address: "http://localhost:8080"
-#  address: "http://mimir-nginx.mimir-test.svc:80"
-  type: mimir
+  # TODO(user): Add fields here

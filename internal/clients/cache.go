@@ -14,6 +14,9 @@ type AwarenessClient interface {
 	GetRuleGroup(ctx context.Context, namespace, groupName string) (*rulefmt.RuleGroup, error)
 	ListRules(ctx context.Context, namespace string) (map[string][]rulefmt.RuleGroup, error)
 	DeleteNamespace(ctx context.Context, namespace string) error
+	CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string) error
+	DeleteAlermanagerConfig(ctx context.Context) error
+	GetAlertmanagerConfig(ctx context.Context) (string, map[string]string, error)
 }
 
 type RulerClientCache struct {

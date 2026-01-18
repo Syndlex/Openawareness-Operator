@@ -4,20 +4,20 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
-  name: clientconfigs.openawareness.my.domain
+  name: mimiralerttenants.openawareness.syndlex
 spec:
-  group: openawareness.my.domain
+  group: openawareness.syndlex
   names:
-    kind: ClientConfig
-    listKind: ClientConfigList
-    plural: clientconfigs
-    singular: clientconfig
+    kind: MimirAlertTenant
+    listKind: MimirAlertTenantList
+    plural: mimiralerttenants
+    singular: mimiralerttenant
   scope: Namespaced
   versions:
   - name: v1beta1
     schema:
       openAPIV3Schema:
-        description: ClientConfig is the Schema for the clientconfigs API
+        description: MimirAlertTenant is the Schema for the mimiralerttenants API
         properties:
           apiVersion:
             description: |-
@@ -37,15 +37,25 @@ spec:
           metadata:
             type: object
           spec:
-            description: ClientConfigSpec defines the desired state of ClientConfig
+            description: MimirAlertTenantSpec defines the desired state of MimirAlertTenant
             properties:
-              address:
+              alertmanagerConfig:
+                description: |-
+                  AlertmanagerConfig contains the raw Alertmanager configuration in YAML format
+                  This should include global settings, routes, receivers, etc.
                 type: string
-              type:
-                type: string
+              templateFiles:
+                additionalProperties:
+                  type: string
+                description: |-
+                  TemplateFiles contains Alertmanager notification templates
+                  Key is the template name, value is the template content
+                type: object
+            required:
+            - alertmanagerConfig
             type: object
           status:
-            description: ClientConfigStatus defines the observed state of ClientConfig
+            description: MimirAlertTenantStatus defines the observed state of MimirAlertTenant
             type: object
         type: object
     served: true

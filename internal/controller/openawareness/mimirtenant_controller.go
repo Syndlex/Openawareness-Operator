@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package monitoringcoreoscom
+package openawareness
 
 import (
 	"context"
@@ -23,28 +23,30 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
 )
 
-// AlertmanagerConfigReconciler reconciles a AlertmanagerConfig object
-type AlertmanagerConfigReconciler struct {
+// MimirTenantReconciler reconciles a MimirTenant object
+type MimirTenantReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=monitoring.coreos.com.my.domain,resources=alertmanagerconfigs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=monitoring.coreos.com.my.domain,resources=alertmanagerconfigs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=monitoring.coreos.com.my.domain,resources=alertmanagerconfigs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimirtenants,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimirtenants/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimirtenants/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the AlertmanagerConfig object against the actual cluster state, and then
+// the MimirTenant object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
-func (r *AlertmanagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MimirTenantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 
 	// TODO(user): your logic here
@@ -53,9 +55,8 @@ func (r *AlertmanagerConfigReconciler) Reconcile(ctx context.Context, req ctrl.R
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AlertmanagerConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MimirTenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
-		// For().
+		For(&openawarenessv1beta1.MimirTenant{}).
 		Complete(r)
 }

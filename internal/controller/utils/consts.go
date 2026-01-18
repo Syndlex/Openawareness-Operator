@@ -2,5 +2,5 @@ package utils
 
 const (
 	MyFinalizerName      string = "clientconfigs/finalizers"
-	MimirTenantNamespace string = "mimir.openawareness.io/namespace"
+	ClientNameAnnotation string = "openawareness.io/client-name"
 )

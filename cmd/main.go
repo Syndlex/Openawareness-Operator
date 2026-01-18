@@ -19,9 +19,9 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"os"
 
 	"github.com/syndlex/openawareness-controller/internal/clients"
+	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -132,7 +132,7 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "8a6b7222.my.domain",
+		LeaderElectionID:       "8a6b7222.syndlex",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -174,11 +174,18 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ClientConfig")
 		os.Exit(1)
 	}
-	if err = (&monitoringcoreoscomcontroller.AlertmanagerConfigReconciler{
+	if err = (&openawarenesscontroller.MimirAlertTenantReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AlertmanagerConfig")
+		setupLog.Error(err, "unable to create controller", "controller", "MimirAlertTenant")
+		os.Exit(1)
+	}
+	if err = (&openawarenesscontroller.MimirTenantReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "MimirTenant")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

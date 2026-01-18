@@ -1,0 +1,131 @@
+apiVersion: openawareness.syndlex/v1beta1
+kind: MimirAlertTenant
+metadata:
+  labels:
+    app.kubernetes.io/name: openawareness-controller
+    app.kubernetes.io/managed-by: kustomize
+  name: mimiralerttenant-sample
+  annotations:
+    # Reference to the ClientConfig that provides Mimir connection details
+    openawareness.io/client-name: "mimir-client"
+    # Mimir namespace/tenant for this alertmanager configuration
+    openawareness.io/mimir-namespace: "devops-team"
+spec:
+  # Optional: Template files for notification templates
+  templateFiles:
+    default_template: |
+      {{ define "__alertmanager" }}AlertManager{{ end }}
+      {{ define "__alertmanagerURL" }}{{ .ExternalURL }}/#/alerts?receiver={{ .Receiver | urlquery }}{{ end }}
+      {{ define "__subject" }}[{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .GroupLabels.SortedPairs.Values | join " " }} {{ if gt (len .CommonLabels) (len .GroupLabels) }}({{ with .CommonLabels.Remove .GroupLabels.Names }}{{ .Values | join " " }}{{ end }}){{ end }}{{ end }}
+      {{ define "__description" }}{{ end }}
+      {{ define "__text_alert_list" }}{{ range . }}Labels:
+      {{ range .Labels.SortedPairs }} - {{ .Name }} = {{ .Value }}
+      {{ end }}Annotations:
+      {{ range .Annotations.SortedPairs }} - {{ .Name }} = {{ .Value }}
+      {{ end }}Source: {{ .GeneratorURL }}
+      {{ end }}{{ end }}
+
+  # Required: Alertmanager configuration in YAML format
+  # This should include global settings, routes, receivers, etc.
+  alertmanagerConfig: |
+    global:
+      # SMTP configuration for email notifications
+      smtp_smarthost: 'localhost:25'
+      smtp_from: 'alertmanager@example.org'
+      smtp_require_tls: false
+      
+      # Slack API URL (if using Slack notifications)
+      # slack_api_url: 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL'
+      
+      # PagerDuty configuration (if using PagerDuty)
+      # pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+    
+    # Reference to template files
+    templates:
+      - 'default_template'
+    
+    # Routing tree for notifications
+    route:
+      # Default receiver for alerts
+      receiver: 'default-receiver'
+      
+      # Group alerts by these labels
+      group_by: ['alertname', 'cluster', 'service']
+      
+      # Wait time before sending initial notification
+      group_wait: 10s
+      
+      # Wait time before sending notification about new alerts in group
+      group_interval: 10s
+      
+      # Wait time before re-sending a notification
+      repeat_interval: 12h
+      
+      # Child routes for specific alert routing
+      routes:
+        # Route critical alerts to PagerDuty and Slack
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          continue: true
+          
+        # Route warning alerts to email
+        - match:
+            severity: warning
+          receiver: 'warning-alerts'
+          
+        # Route specific team alerts
+        - match:
+            team: devops
+          receiver: 'devops-team'
+    
+    # Alert receivers configuration
+    receivers:
+      # Default receiver - email notification
+      - name: 'default-receiver'
+        email_configs:
+          - to: 'team@example.org'
+            headers:
+              Subject: '{{ template "__subject" . }}'
+            html: '{{ template "__text_alert_list" .Alerts }}'
+      
+      # Critical alerts - multiple notification channels
+      - name: 'critical-alerts'
+        email_configs:
+          - to: 'oncall@example.org'
+            headers:
+              Subject: '[CRITICAL] {{ template "__subject" . }}'
+            send_resolved: true
+        # Uncomment to enable Slack notifications
+        # slack_configs:
+        #   - channel: '#alerts-critical'
+        #     title: 'Critical Alert: {{ .GroupLabels.alertname }}'
+        #     text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        #     send_resolved: true
+        # Uncomment to enable PagerDuty notifications
+        # pagerduty_configs:
+        #   - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        #     description: '{{ .GroupLabels.alertname }}'
+      
+      # Warning alerts - email only
+      - name: 'warning-alerts'
+        email_configs:
+          - to: 'team@example.org'
+            headers:
+              Subject: '[WARNING] {{ template "__subject" . }}'
+      
+      # DevOps team specific receiver
+      - name: 'devops-team'
+        email_configs:
+          - to: 'devops-team@example.org'
+            headers:
+              Subject: '[DevOps] {{ template "__subject" . }}'
+    
+    # Inhibition rules to suppress notifications
+    inhibit_rules:
+      # Inhibit warning alerts if critical alert is firing for same alertname
+      - source_match:
+          severity: 'critical'
+        target_match:
+          severity: 'warning'
+        equal: ['alertname', 'cluster', 'service']

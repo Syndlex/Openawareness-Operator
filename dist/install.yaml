@@ -12,9 +12,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.16.1
-  name: clientconfigs.openawareness.my.domain
+  name: clientconfigs.openawareness.syndlex
 spec:
-  group: openawareness.my.domain
+  group: openawareness.syndlex
   names:
     kind: ClientConfig
     listKind: ClientConfigList
@@ -117,7 +117,7 @@ metadata:
   name: openawareness-controller-manager-role
 rules:
 - apiGroups:
-  - monitoring.coreos.com.my.domain
+  - monitoring.coreos.com.syndlex
   resources:
   - prometheusrules
   verbs:
@@ -129,13 +129,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - monitoring.coreos.com.my.domain
+  - monitoring.coreos.com.syndlex
   resources:
   - prometheusrules/finalizers
   verbs:
   - update
 - apiGroups:
-  - monitoring.coreos.com.my.domain
+  - monitoring.coreos.com.syndlex
   resources:
   - prometheusrules/status
   verbs:
@@ -143,7 +143,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs
   verbs:
@@ -155,13 +155,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs/finalizers
   verbs:
   - update
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs/status
   verbs:
@@ -206,7 +206,7 @@ metadata:
   name: openawareness-controller-openawareness-clientconfig-editor-role
 rules:
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs
   verbs:
@@ -218,7 +218,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs/status
   verbs:
@@ -233,7 +233,7 @@ metadata:
   name: openawareness-controller-openawareness-clientconfig-viewer-role
 rules:
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs
   verbs:
@@ -241,7 +241,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - openawareness.my.domain
+  - openawareness.syndlex
   resources:
   - clientconfigs/status
   verbs:

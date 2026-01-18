@@ -21,7 +21,6 @@ import (
 	"errors"
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
 	"github.com/syndlex/openawareness-controller/internal/clients"
@@ -46,9 +45,9 @@ type PrometheusRulesReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=monitoring.coreos.com.my.domain,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=monitoring.coreos.com.my.domain,resources=prometheusrules/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=monitoring.coreos.com.my.domain,resources=prometheusrules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=monitoring.coreos.com.syndlex,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=monitoring.coreos.com.syndlex,resources=prometheusrules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=monitoring.coreos.com.syndlex,resources=prometheusrules/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -120,11 +119,10 @@ func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
 		for _, rule := range group.Rules {
 			returnRules = append(returnRules, newRule(rule))
 		}
-		duration, _ := model.ParseDuration(group.Interval)
 		returnGroups = append(returnGroups, rulefmt.RuleGroup{
-			Name:     group.Name,
-			Interval: duration,
-			Rules:    returnRules,
+			Name: group.Name,
+			//Interval: group.Interval, todo
+			Rules: returnRules,
 		})
 	}
 
@@ -154,13 +152,6 @@ func newRule(rule monitoringv1.Rule) rulefmt.RuleNode {
 	}
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *PrometheusRulesReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&monitoringv1.PrometheusRule{}).
-		Complete(r)
-}
-
 func (r *PrometheusRulesReconciler) clientFromAnnotation(logger logr.Logger, rule *monitoringv1.PrometheusRule) (clients.AwarenessClient, error) {
 	if rule.Annotations == nil {
 		logger.Info("rule is missing client annotation, '"+clientAnnoation+"'", "rulename", rule.Name)
@@ -188,4 +179,11 @@ func (r *PrometheusRulesReconciler) getNamespaceFromAnnotations(logger logr.Logg
 		return "anonymous"
 	}
 	return mimirNamespace
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *PrometheusRulesReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&monitoringv1.PrometheusRule{}).
+		Complete(r)
 }
