@@ -34,7 +34,7 @@ Manages Alertmanager configurations for a specific tenant in Grafana Mimir.
 
 ```yaml
 apiVersion: openawareness.syndlex/v1beta1
-kind: MimirAlertTenant
+kind:  MimirAlertTenant
 metadata:
   name: team-alerts
   annotations:
@@ -111,7 +111,24 @@ make install
 ```
 
 #### 2. Deploy the Controller
-Build and push your image:
+
+**Option A: Deploy to MicroK8s (Recommended for local development)**
+
+The Makefile includes targets for deploying to MicroK8s with its local registry:
+
+```sh
+# Build, push to MicroK8s registry, and deploy in one command
+make microk8s-deploy
+```
+
+This command will:
+1. Build the container image
+2. Push it to the MicroK8s registry at `localhost:32000`
+3. Deploy the controller to your MicroK8s cluster
+
+**Option B: Deploy to External Registry**
+
+Build and push your image to an external registry:
 ```sh
 make docker-build docker-push IMG=<your-registry>/openawareness-controller:tag
 ```
@@ -120,6 +137,11 @@ Deploy to cluster:
 ```sh
 make deploy IMG=<your-registry>/openawareness-controller:tag
 ```
+
+**Available Make Targets for MicroK8s:**
+- `make microk8s-build` - Build image for MicroK8s registry
+- `make microk8s-push` - Build and push image to MicroK8s registry
+- `make microk8s-deploy` - Build, push, and deploy to MicroK8s cluster
 
 #### 3. Create a ClientConfig
 First, create a ClientConfig to connect to your Mimir instance:

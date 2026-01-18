@@ -1,5 +1,9 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+# MicroK8s registry URL
+MICROK8S_REGISTRY ?= localhost:32000
+MICROK8S_IMG ?= $(MICROK8S_REGISTRY)/openawareness-controller:latest
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.31.0
 
@@ -124,6 +128,19 @@ docker-build: ## Build docker image with the manager.
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	$(CONTAINER_TOOL) push ${IMG}
+
+.PHONY: microk8s-build
+microk8s-build: ## Build docker image for MicroK8s registry.
+	$(CONTAINER_TOOL) build -t ${MICROK8S_IMG} .
+
+.PHONY: microk8s-push
+microk8s-push: microk8s-build ## Build and push image to MicroK8s registry.
+	$(CONTAINER_TOOL) push ${MICROK8S_IMG} --tls-verify=false
+
+.PHONY: microk8s-deploy
+microk8s-deploy: manifests kustomize microk8s-push ensure-microk8s-context ## Build, push to MicroK8s registry and deploy controller.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${MICROK8S_IMG}
+	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:

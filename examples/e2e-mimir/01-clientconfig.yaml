@@ -1,0 +1,24 @@
+apiVersion: openawareness.syndlex/v1beta1
+kind: ClientConfig
+metadata:
+  name: e2e-mimir-client
+  labels:
+    app.kubernetes.io/name: openawareness-controller
+    app.kubernetes.io/component: client-config
+    app.kubernetes.io/instance: e2e-mimir
+    environment: e2e-test
+spec:
+  # Address of the Mimir gateway service deployed by e2e tests
+  # This uses the Kubernetes service DNS name for in-cluster access
+  address: "http://mimir-gateway.mimir.svc.cluster.local:80"
+  
+  # Type of client - Mimir in this case
+  type: mimir
+  
+  # TLS is not enabled for the e2e Mimir deployment
+  # In production, you should enable TLS for secure communication
+  # tls:
+  #   insecureSkipVerify: false
+  #   ca: <base64-encoded-ca-cert>
+  #   cert: <base64-encoded-client-cert>
+  #   key: <base64-encoded-client-key>

@@ -50,10 +50,172 @@ spec:
               address:
                 type: string
               type:
-                type: integer
+                type: string
             type: object
           status:
             description: ClientConfigStatus defines the observed state of ClientConfig
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: mimiralerttenants.openawareness.syndlex
+spec:
+  group: openawareness.syndlex
+  names:
+    kind: MimirAlertTenant
+    listKind: MimirAlertTenantList
+    plural: mimiralerttenants
+    singular: mimiralerttenant
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: MimirAlertTenant is the Schema for the mimiralerttenants API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MimirAlertTenantSpec defines the desired state of MimirAlertTenant
+            properties:
+              alertmanagerConfig:
+                description: |-
+                  AlertmanagerConfig contains the raw Alertmanager configuration in YAML format
+                  This should include global settings, routes, receivers, etc.
+                type: string
+              templateFiles:
+                additionalProperties:
+                  type: string
+                description: |-
+                  TemplateFiles contains Alertmanager notification templates
+                  Key is the template name, value is the template content
+                type: object
+            required:
+            - alertmanagerConfig
+            type: object
+          status:
+            description: MimirAlertTenantStatus defines the observed state of MimirAlertTenant
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.1
+  name: mimirtenants.openawareness.syndlex
+spec:
+  group: openawareness.syndlex
+  names:
+    kind: MimirTenant
+    listKind: MimirTenantList
+    plural: mimirtenants
+    singular: mimirtenant
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: MimirTenant is the Schema for the mimirtenants API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: MimirTenantSpec defines the desired state of MimirTenant
+            properties:
+              client_ref:
+                description: ObjectReference contains enough information to let you
+                  inspect or modify the referred object.
+                properties:
+                  apiVersion:
+                    description: API version of the referent.
+                    type: string
+                  fieldPath:
+                    description: |-
+                      If referring to a piece of an object instead of an entire object, this string
+                      should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                      For example, if the object reference is to a container within a pod, this would take on a value like:
+                      "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                      the event) or if no container name is specified "spec.containers[2]" (container with
+                      index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                      referencing a part of an object.
+                    type: string
+                  kind:
+                    description: |-
+                      Kind of the referent.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                    type: string
+                  name:
+                    description: |-
+                      Name of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                    type: string
+                  resourceVersion:
+                    description: |-
+                      Specific resourceVersion to which this reference is made, if any.
+                      More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                    type: string
+                  uid:
+                    description: |-
+                      UID of the referent.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              tenant:
+                type: string
+            required:
+            - client_ref
+            type: object
+          status:
+            description: MimirTenantStatus defines the observed state of MimirTenant
             type: object
         type: object
     served: true
@@ -117,7 +279,7 @@ metadata:
   name: openawareness-controller-manager-role
 rules:
 - apiGroups:
-  - monitoring.coreos.com.syndlex
+  - monitoring.coreos.com
   resources:
   - prometheusrules
   verbs:
@@ -129,13 +291,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - monitoring.coreos.com.syndlex
+  - monitoring.coreos.com
   resources:
   - prometheusrules/finalizers
   verbs:
   - update
 - apiGroups:
-  - monitoring.coreos.com.syndlex
+  - monitoring.coreos.com
   resources:
   - prometheusrules/status
   verbs:
@@ -146,6 +308,8 @@ rules:
   - openawareness.syndlex
   resources:
   - clientconfigs
+  - mimiralerttenants
+  - mimirtenants
   verbs:
   - create
   - delete
@@ -158,12 +322,16 @@ rules:
   - openawareness.syndlex
   resources:
   - clientconfigs/finalizers
+  - mimiralerttenants/finalizers
+  - mimirtenants/finalizers
   verbs:
   - update
 - apiGroups:
   - openawareness.syndlex
   resources:
   - clientconfigs/status
+  - mimiralerttenants/status
+  - mimirtenants/status
   verbs:
   - get
   - patch
@@ -244,6 +412,106 @@ rules:
   - openawareness.syndlex
   resources:
   - clientconfigs/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: openawareness-controller
+  name: openawareness-controller-openawareness-mimiralerttenant-editor-role
+rules:
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimiralerttenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimiralerttenants/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: openawareness-controller
+  name: openawareness-controller-openawareness-mimiralerttenant-viewer-role
+rules:
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimiralerttenants
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimiralerttenants/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: openawareness-controller
+  name: openawareness-controller-openawareness-mimirtenant-editor-role
+rules:
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimirtenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimirtenants/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: openawareness-controller
+  name: openawareness-controller-openawareness-mimirtenant-viewer-role
+rules:
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimirtenants
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimirtenants/status
   verbs:
   - get
 ---
