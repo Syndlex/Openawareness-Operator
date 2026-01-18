@@ -178,9 +178,49 @@ See the [Grafana Mimir Alertmanager API documentation](https://grafana.com/docs/
 ## Development
 
 ### Running Tests
+
+#### Unit Tests
+Run unit tests with code coverage:
 ```sh
 make test
 ```
+
+#### End-to-End Tests
+Run e2e tests against a running Kubernetes cluster:
+```sh
+make test-e2e
+```
+
+This command will automatically:
+1. Check and switch to the microk8s context if available
+2. Install Mimir via Helm if not already installed
+3. Create a service alias for e2e test access
+4. Run the full e2e test suite
+
+**Prerequisites for E2E Tests:**
+- microk8s cluster configured with kubectl context
+- Helm 3.x installed
+- kubectl available in PATH
+
+**Running Specific E2E Tests:**
+```sh
+# Run only MimirAlertTenant tests
+ginkgo --focus="MimirAlertTenant E2E" test/e2e
+
+# Run with verbose output
+ginkgo -v test/e2e
+```
+
+**Manual Setup (if needed):**
+```sh
+# Switch to microk8s context
+make ensure-microk8s-context
+
+# Install Mimir
+make ensure-mimir
+```
+
+See [test/e2e/README.md](test/e2e/README.md) for detailed e2e test documentation and troubleshooting.
 
 ### Running Locally
 ```sh

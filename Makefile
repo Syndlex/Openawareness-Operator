@@ -66,8 +66,8 @@ test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 # Utilize Kind or modify the e2e tests to load the image locally, enabling compatibility with other vendors.
-.PHONY: test-e2e  # Run the e2e tests against a Kind k8s instance that is spun up.
-test-e2e:
+.PHONY: test-e2e  # Run the e2e tests against a microk8s cluster.
+test-e2e: ensure-microk8s-context
 	go test ./test/e2e/ -v -ginkgo.v
 
 .PHONY: lint
@@ -77,6 +77,32 @@ lint: golangci-lint ## Run golangci-lint linter
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix
+
+.PHONY: ensure-microk8s-context
+ensure-microk8s-context: ## Ensure kubectl is using microk8s context
+	@echo "Checking kubectl context..."
+	@CURRENT_CONTEXT=$$($(KUBECTL) config current-context 2>/dev/null || echo ""); \
+	if [ "$$CURRENT_CONTEXT" != "microk8s" ]; then \
+		echo "Current context: $$CURRENT_CONTEXT"; \
+		if $(KUBECTL) config get-contexts microk8s >/dev/null 2>&1; then \
+			echo "Switching to microk8s context..."; \
+			$(KUBECTL) config use-context microk8s; \
+		else \
+			echo "Error: microk8s context not found. Please configure microk8s first."; \
+			echo "Available contexts:"; \
+			$(KUBECTL) config get-contexts; \
+			exit 1; \
+		fi \
+	else \
+		echo "Already using microk8s context"; \
+	fi
+
+.PHONY: clean-mimir
+clean-mimir: ## Uninstall Mimir and clean up resources
+	@echo "Uninstalling Mimir..."
+	@helm uninstall mimir -n mimir 2>/dev/null || echo "Mimir not installed via Helm"
+	@$(KUBECTL) delete namespace mimir --ignore-not-found=true
+	@echo "Mimir cleanup complete"
 
 ##@ Build
 

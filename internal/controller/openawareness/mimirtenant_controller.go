@@ -19,6 +19,7 @@ package openawareness
 import (
 	"context"
 
+	"github.com/syndlex/openawareness-controller/internal/clients"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +31,8 @@ import (
 // MimirTenantReconciler reconciles a MimirTenant object
 type MimirTenantReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	RulerClients *clients.RulerClientCache
+	Scheme       *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimirtenants,verbs=get;list;watch;create;update;patch;delete

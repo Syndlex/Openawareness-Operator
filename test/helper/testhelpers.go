@@ -2,10 +2,11 @@ package helper
 
 import (
 	"fmt"
-	. "github.com/onsi/ginkgo/v2"
 	"os"
 	"os/exec"
 	"strings"
+
+	. "github.com/onsi/ginkgo/v2"
 )
 
 // Run and GetProjectDir are copied from kubebuilder e2e test scaffolding (test/e2e/utils/utils.go)
@@ -36,6 +37,8 @@ func GetProjectDir() (string, error) {
 	if err != nil {
 		return wd, err
 	}
+	// Remove test/e2e or internal/test/e2e from the path to get project root
+	wd = strings.Replace(wd, "/test/e2e", "", -1)
 	wd = strings.Replace(wd, "/internal/test/e2e", "", -1)
 	return wd, nil
 }

@@ -90,22 +90,23 @@ receivers:
 			controllerReconciler := &MimirAlertTenantReconciler{
 				Client:       testClient,
 				Scheme:       testClient.Scheme(),
-				RulerClients: nil, // No client cache - should return early
+				RulerClients: nil, // No client cache - should return error
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
-			// Should not error when client is not found
-			Expect(err).NotTo(HaveOccurred())
+			// Should error when client cache is nil
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("ruler clients cache is nil"))
 
-			By("Checking that resource exists but has no finalizer (because client lookup failed)")
+			By("Checking that resource has finalizer added despite client lookup failure")
 			resource := &openawarenessv1beta1.MimirAlertTenant{}
 			err = testClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Finalizer should NOT be added because we return early when client is not found
-			Expect(resource.Finalizers).NotTo(ContainElement(utils.MyFinalizerName))
+			// Finalizer SHOULD be added before client lookup
+			Expect(resource.Finalizers).To(ContainElement(utils.MyFinalizerName))
 		})
 
 		It("should successfully process the resource (verification test)", func() {

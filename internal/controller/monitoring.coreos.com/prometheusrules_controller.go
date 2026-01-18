@@ -19,6 +19,7 @@ package monitoringcoreoscom
 import (
 	"context"
 	"errors"
+
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/prometheus/prometheus/model/rulefmt"
@@ -45,9 +46,9 @@ type PrometheusRulesReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=monitoring.coreos.com.syndlex,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=monitoring.coreos.com.syndlex,resources=prometheusrules/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=monitoring.coreos.com.syndlex,resources=prometheusrules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

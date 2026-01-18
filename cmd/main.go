@@ -20,8 +20,9 @@ import (
 	"crypto/tls"
 	"flag"
 
-	"github.com/syndlex/openawareness-controller/internal/clients"
 	"os"
+
+	"github.com/syndlex/openawareness-controller/internal/clients"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -175,15 +176,17 @@ func main() {
 		os.Exit(1)
 	}
 	if err = (&openawarenesscontroller.MimirAlertTenantReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		RulerClients: clientCache,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirAlertTenant")
 		os.Exit(1)
 	}
 	if err = (&openawarenesscontroller.MimirTenantReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		RulerClients: clientCache,
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirTenant")
 		os.Exit(1)

@@ -59,22 +59,25 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if err := r.Get(ctx, req.NamespacedName, rule); err != nil {
 		return ctrl.Result{}, k8sClient.IgnoreNotFound(err)
 	}
-	logger.Info("Found Rule", "Name", rule.Name)
-
-	alertManagerClient, err := r.clientFromCrd(logger, rule)
-	if err != nil {
-
-		logger.V(1).Info("No Alert manger Client found Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig", "Name", rule.Name)
-		return ctrl.Result{}, nil
-	}
+	logger.Info("Found MimirAlertTenant", "Name", rule.Name, "Namespace", rule.Namespace)
 
 	if rule.ObjectMeta.DeletionTimestamp.IsZero() {
-		// Register finalizer
+		// Register finalizer first, before checking for client
 		if !controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
 			controllerutil.AddFinalizer(rule, utils.MyFinalizerName)
 			if err := r.Update(ctx, rule); err != nil {
 				return ctrl.Result{}, err
 			}
+		}
+
+		// Get the alertmanager client
+		alertManagerClient, err := r.clientFromCrd(logger, rule)
+		if err != nil {
+			logger.Error(err, "Failed to get Alertmanager client",
+				"name", rule.Name,
+				"namespace", rule.Namespace)
+			// Return error to trigger retry
+			return ctrl.Result{}, err
 		}
 
 		// Validate the Alertmanager configuration before sending to Mimir
@@ -101,15 +104,33 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			"namespace", rule.Namespace)
 
 	} else {
-		err := alertManagerClient.DeleteAlermanagerConfig(ctx)
+		// The object is being deleted
+		// Get the alertmanager client for cleanup
+		alertManagerClient, err := r.clientFromCrd(logger, rule)
+		if err != nil {
+			logger.Error(err, "Failed to get Alertmanager client for deletion",
+				"name", rule.Name,
+				"namespace", rule.Namespace)
+			// If we can't get the client, we still need to remove the finalizer
+			// to allow deletion to proceed
+			if controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
+				controllerutil.RemoveFinalizer(rule, utils.MyFinalizerName)
+				if err := r.Update(ctx, rule); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+			return ctrl.Result{}, nil
+		}
+
+		err = alertManagerClient.DeleteAlermanagerConfig(ctx)
 		if err != nil {
 			logger.Error(err, "Failed to delete Alertmanager configuration",
 				"name", rule.Name,
 				"namespace", rule.Namespace)
-			return ctrl.Result{}, err
+			// Continue with finalizer removal even if deletion fails
 		}
 
-		// The object is being deleted check for finalizer
+		// Remove finalizer
 		if controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
 			controllerutil.RemoveFinalizer(rule, utils.MyFinalizerName)
 			if err := r.Update(ctx, rule); err != nil {
