@@ -3,6 +3,8 @@ package clients
 import (
 	"context"
 	"errors"
+	"fmt"
+
 	"github.com/grafana/dskit/crypto/tls"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	"github.com/syndlex/openawareness-controller/internal/mimir"
@@ -29,8 +31,8 @@ func NewRulerClientCache() *RulerClientCache {
 	}
 }
 
-func (e *RulerClientCache) AddMimirClient(address string, name string, ctx context.Context) {
-	client, _ := mimir.New(mimir.Config{
+func (e *RulerClientCache) AddMimirClient(address string, name string, ctx context.Context) error {
+	client, err := mimir.New(mimir.Config{
 		User:            "",
 		Key:             "",
 		Address:         address,
@@ -41,7 +43,17 @@ func (e *RulerClientCache) AddMimirClient(address string, name string, ctx conte
 		AuthToken:       "",
 		ExtraHeaders:    nil,
 	}, ctx)
+	if err != nil {
+		return fmt.Errorf("creating Mimir client: %w", err)
+	}
+
+	// Perform health check to verify connectivity
+	if err := client.HealthCheck(ctx); err != nil {
+		return fmt.Errorf("health check failed: %w", err)
+	}
+
 	e.clients[name] = client
+	return nil
 }
 
 func (e *RulerClientCache) RemoveClient(name string) {
@@ -58,6 +70,6 @@ func (e *RulerClientCache) GetClient(name string) (AwarenessClient, error) {
 	return nil, errors.New("client not found")
 }
 
-func (e *RulerClientCache) AddPromClient(address string, name string, ctx context.Context) {
-	panic("implement me")
+func (e *RulerClientCache) AddPromClient(address string, name string, ctx context.Context) error {
+	return errors.New("Prometheus client not yet implemented")
 }

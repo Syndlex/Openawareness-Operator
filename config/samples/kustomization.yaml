@@ -2,5 +2,4 @@
 resources:
 - openawareness_v1beta1_clientconfig.yaml
 - openawareness_v1beta1_mimiralerttenant.yaml
-- openawareness_v1beta1_mimirtenant.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples

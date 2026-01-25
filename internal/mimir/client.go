@@ -112,6 +112,26 @@ func New(cfg Config, ctx context.Context) (*MimirClient, error) {
 	}, nil
 }
 
+// HealthCheck performs a lightweight health check by attempting to list rules
+// for an empty namespace. This verifies connectivity, authentication, and basic API access.
+func (r *MimirClient) HealthCheck(ctx context.Context) error {
+	r.log.V(1).Info("Performing health check")
+
+	// Use a simple API call to verify connectivity
+	// List rules for a system namespace that should always be accessible
+	req := r.apiPath
+
+	res, err := r.doRequest(ctx, req, "GET", nil, -1)
+	if err != nil {
+		r.log.Error(err, "Health check failed")
+		return err
+	}
+	defer res.Body.Close()
+
+	r.log.Info("Health check successful", "status", res.Status)
+	return nil
+}
+
 // Query executes a PromQL query against the Mimir cluster.
 func (r *MimirClient) Query(ctx context.Context, query string) (*http.Response, error) {
 	req := fmt.Sprintf("/prometheus/api/v1/query?query=%s&time=%d", url.QueryEscape(query), time.Now().Unix())

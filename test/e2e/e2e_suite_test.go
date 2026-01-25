@@ -116,8 +116,6 @@ var _ = BeforeSuite(func() {
 	// Wait for openawareness CRDs to be established
 	_, err = kubeCtl.Run("wait", "--for=condition=Established", "--timeout=30s", "crd/clientconfigs.openawareness.syndlex")
 	Expect(err).NotTo(HaveOccurred())
-	_, err = kubeCtl.Run("wait", "--for=condition=Established", "--timeout=30s", "crd/mimirtenants.openawareness.syndlex")
-	Expect(err).NotTo(HaveOccurred())
 	_, err = kubeCtl.Run("wait", "--for=condition=Established", "--timeout=30s", "crd/mimiralerttenants.openawareness.syndlex")
 	Expect(err).NotTo(HaveOccurred())
 

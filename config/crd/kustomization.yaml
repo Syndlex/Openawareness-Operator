@@ -4,7 +4,6 @@
 resources:
 - bases/openawareness.syndlex_clientconfigs.yaml
 - bases/openawareness.syndlex_mimiralerttenants.yaml
-- bases/openawareness.syndlex_mimirtenants.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
@@ -16,7 +15,6 @@ patches:
 # patches here are for enabling the CA injection for each CRD
 #- path: patches/cainjection_in_openawareness_clientconfigs.yaml
 #- path: patches/cainjection_in_openawareness_mimiralerttenants.yaml
-#- path: patches/cainjection_in_openawareness_mimirtenants.yaml
 # +kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # [WEBHOOK] To enable webhook, uncomment the following section

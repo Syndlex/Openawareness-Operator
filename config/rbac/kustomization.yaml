@@ -22,10 +22,7 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the Project itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- openawareness_mimirtenant_editor_role.yaml
-- openawareness_mimirtenant_viewer_role.yaml
 - openawareness_mimiralerttenant_editor_role.yaml
 - openawareness_mimiralerttenant_viewer_role.yaml
 - openawareness_clientconfig_editor_role.yaml
 - openawareness_clientconfig_viewer_role.yaml
-

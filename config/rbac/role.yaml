@@ -35,7 +35,6 @@ rules:
   resources:
   - clientconfigs
   - mimiralerttenants
-  - mimirtenants
   verbs:
   - create
   - delete
@@ -49,7 +48,6 @@ rules:
   resources:
   - clientconfigs/finalizers
   - mimiralerttenants/finalizers
-  - mimirtenants/finalizers
   verbs:
   - update
 - apiGroups:
@@ -57,7 +55,6 @@ rules:
   resources:
   - clientconfigs/status
   - mimiralerttenants/status
-  - mimirtenants/status
   verbs:
   - get
   - patch

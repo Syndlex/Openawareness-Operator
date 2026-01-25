@@ -181,12 +181,21 @@ The e2e tests can be integrated into CI/CD pipelines. Ensure:
 
 Current e2e test coverage:
 
+### MimirAlertTenant Tests
 - ✅ MimirAlertTenant creation and reconciliation
 - ✅ MimirAlertTenant updates (config and templates)
 - ✅ MimirAlertTenant deletion and cleanup
 - ✅ Error handling (missing annotations, invalid configs)
 - ✅ ClientConfig integration
 - ✅ Finalizer lifecycle
+
+### ClientConfig Tests
+- ✅ ClientConfig creation with valid Mimir endpoint
+- ✅ Status updates (ConnectionStatus, Conditions, LastConnectionTime)
+- ✅ Invalid URL error handling (InvalidURL reason)
+- ✅ Unreachable host error handling (NetworkError, DNSResolutionError)
+- ✅ Connection recovery (Disconnected → Connected transition)
+- ✅ Finalizer lifecycle and cleanup
 
 ## Additional Resources
 

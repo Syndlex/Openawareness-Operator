@@ -18,8 +18,11 @@ package openawareness
 
 import (
 	"context"
-	"github.com/syndlex/openawareness-controller/internal/clients"
-	"github.com/syndlex/openawareness-controller/internal/controller/utils"
+	"fmt"
+	"strings"
+	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8sClient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -27,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
+	"github.com/syndlex/openawareness-controller/internal/clients"
+	"github.com/syndlex/openawareness-controller/internal/controller/utils"
 )
 
 // ClientConfigReconciler reconciles a ClientConfig object
@@ -70,14 +75,36 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				return ctrl.Result{}, err
 			}
 		}
+
+		// Attempt to create and validate client connection
 		spec := clientConfig.Spec
+		var err error
+
 		switch spec.Type {
 		case openawarenessv1beta1.Mimir:
-			r.RulerClients.AddMimirClient(spec.Address, clientConfig.Name, ctx)
+			err = r.RulerClients.AddMimirClient(spec.Address, clientConfig.Name, ctx)
 		case openawarenessv1beta1.Prometheus:
-			r.RulerClients.AddPromClient(spec.Address, clientConfig.Name, ctx)
+			err = r.RulerClients.AddPromClient(spec.Address, clientConfig.Name, ctx)
 		}
+
+		// Update status based on connection result
+		if err != nil {
+			logger.Error(err, "Failed to add client", "Name", clientConfig.Name, "Type", spec.Type)
+			if statusErr := r.updateStatusDisconnected(ctx, clientConfig, err); statusErr != nil {
+				logger.Error(statusErr, "Failed to update status")
+				return ctrl.Result{}, statusErr
+			}
+			// Requeue to retry connection
+			return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
+		}
+
 		logger.Info("Added new Client Config", "Name", clientConfig.Name)
+
+		// Update status to connected
+		if statusErr := r.updateStatusConnected(ctx, clientConfig); statusErr != nil {
+			logger.Error(statusErr, "Failed to update status")
+			return ctrl.Result{}, statusErr
+		}
 	} else {
 		// The object is being deleted check for finalizer
 		if controllerutil.ContainsFinalizer(clientConfig, utils.MyFinalizerName) {
@@ -93,6 +120,127 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	return ctrl.Result{}, nil
+}
+
+// updateStatusConnected updates the ClientConfig status to indicate successful connection
+func (r *ClientConfigReconciler) updateStatusConnected(ctx context.Context, clientConfig *openawarenessv1beta1.ClientConfig) error {
+	now := metav1.Now()
+
+	clientConfig.Status.ConnectionStatus = openawarenessv1beta1.ConnectionStatusConnected
+	clientConfig.Status.LastConnectionTime = &now
+	clientConfig.Status.ErrorMessage = ""
+
+	// Update conditions
+	condition := metav1.Condition{
+		Type:               openawarenessv1beta1.ConditionTypeReady,
+		Status:             metav1.ConditionTrue,
+		ObservedGeneration: clientConfig.Generation,
+		LastTransitionTime: now,
+		Reason:             openawarenessv1beta1.ReasonConnected,
+		Message:            "Successfully connected to endpoint",
+	}
+
+	setCondition(&clientConfig.Status.Conditions, condition)
+
+	return r.Status().Update(ctx, clientConfig)
+}
+
+// updateStatusDisconnected updates the ClientConfig status to indicate connection failure
+func (r *ClientConfigReconciler) updateStatusDisconnected(ctx context.Context, clientConfig *openawarenessv1beta1.ClientConfig, err error) error {
+	now := metav1.Now()
+
+	clientConfig.Status.ConnectionStatus = openawarenessv1beta1.ConnectionStatusDisconnected
+	clientConfig.Status.ErrorMessage = err.Error()
+
+	// Determine the reason based on the error type
+	reason, message := categorizeError(err)
+
+	// Update conditions
+	condition := metav1.Condition{
+		Type:               openawarenessv1beta1.ConditionTypeReady,
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: clientConfig.Generation,
+		LastTransitionTime: now,
+		Reason:             reason,
+		Message:            message,
+	}
+
+	setCondition(&clientConfig.Status.Conditions, condition)
+
+	return r.Status().Update(ctx, clientConfig)
+}
+
+// categorizeError determines the appropriate reason and message for a connection error
+func categorizeError(err error) (string, string) {
+	errMsg := err.Error()
+
+	// Check for DNS errors (highest priority for network errors)
+	if strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "dns") {
+		return openawarenessv1beta1.ReasonDNSResolutionError, "DNS resolution failed"
+	}
+
+	// Check for timeout errors
+	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "i/o timeout") {
+		return openawarenessv1beta1.ReasonTimeoutError, "Connection timeout"
+	}
+
+	// Check for connection refused or network errors
+	if strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "connection reset") ||
+		strings.Contains(errMsg, "network") || strings.Contains(errMsg, "dial tcp") ||
+		strings.Contains(errMsg, "dial udp") {
+		return openawarenessv1beta1.ReasonNetworkError, "Network connection error"
+	}
+
+	// Check for URL parsing errors (check after network errors since parse errors might mention "dial")
+	if strings.Contains(errMsg, "missing protocol scheme") || strings.Contains(errMsg, "invalid URL") ||
+		strings.Contains(errMsg, "unsupported protocol") {
+		return openawarenessv1beta1.ReasonInvalidURL, "Invalid URL format"
+	}
+
+	// Check for TLS errors
+	if strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "x509") {
+		return openawarenessv1beta1.ReasonInvalidTLSConfig, "TLS configuration error"
+	}
+
+	// Check for HTTP status code errors
+	if strings.Contains(errMsg, "401") {
+		return openawarenessv1beta1.ReasonUnauthorized, "Authentication failed"
+	}
+	if strings.Contains(errMsg, "403") {
+		return openawarenessv1beta1.ReasonForbidden, "Access forbidden"
+	}
+	if strings.Contains(errMsg, "404") {
+		return openawarenessv1beta1.ReasonNotFound, "Endpoint not found"
+	}
+	if strings.Contains(errMsg, "429") {
+		return openawarenessv1beta1.ReasonTooManyRequests, "Rate limit exceeded"
+	}
+	if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "502") ||
+		strings.Contains(errMsg, "503") || strings.Contains(errMsg, "504") {
+		return openawarenessv1beta1.ReasonServerError, "Server error"
+	}
+
+	// Default to network error for unknown errors
+	return openawarenessv1beta1.ReasonNetworkError, fmt.Sprintf("Connection failed: %s", errMsg)
+}
+
+// setCondition sets or updates a condition in the conditions list
+func setCondition(conditions *[]metav1.Condition, newCondition metav1.Condition) {
+	if conditions == nil {
+		*conditions = []metav1.Condition{}
+	}
+
+	// Find existing condition of the same type
+	for i, condition := range *conditions {
+		if condition.Type == newCondition.Type {
+			// Update existing condition
+			(*conditions)[i] = newCondition
+			return
+		}
+	}
+
+	// Condition doesn't exist, append it
+	*conditions = append(*conditions, newCondition)
 }
 
 // SetupWithManager sets up the controller with the Manager.

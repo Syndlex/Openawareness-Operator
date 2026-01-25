@@ -39,9 +39,65 @@ const (
 
 // ClientConfigStatus defines the observed state of ClientConfig
 type ClientConfigStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Conditions represent the latest available observations of the ClientConfig's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// LastConnectionTime is the timestamp of the last successful connection attempt
+	// +optional
+	LastConnectionTime *metav1.Time `json:"lastConnectionTime,omitempty"`
+
+	// ConnectionStatus indicates whether the client can connect to Mimir/Prometheus
+	// Possible values: "Connected", "Disconnected", "Unknown"
+	// +optional
+	ConnectionStatus string `json:"connectionStatus,omitempty"`
+
+	// ErrorMessage contains the last error message if connection failed
+	// +optional
+	ErrorMessage string `json:"errorMessage,omitempty"`
 }
+
+// Condition types for ClientConfig
+const (
+	// ConditionTypeReady indicates whether the ClientConfig is ready to use
+	ConditionTypeReady = "Ready"
+)
+
+// Condition reasons for ClientConfig
+const (
+	// ReasonConfigured indicates the ClientConfig is properly configured
+	ReasonConfigured = "Configured"
+	// ReasonInvalidURL indicates the address cannot be parsed as a valid URL
+	ReasonInvalidURL = "InvalidURL"
+	// ReasonInvalidTLSConfig indicates the TLS configuration is invalid
+	ReasonInvalidTLSConfig = "InvalidTLSConfig"
+	// ReasonAuthConflict indicates both basic auth and token are configured
+	ReasonAuthConflict = "AuthConflict"
+	// ReasonNetworkError indicates a network connectivity error
+	ReasonNetworkError = "NetworkError"
+	// ReasonTimeoutError indicates the connection timed out
+	ReasonTimeoutError = "TimeoutError"
+	// ReasonDNSResolutionError indicates DNS resolution failed
+	ReasonDNSResolutionError = "DNSResolutionError"
+	// ReasonUnauthorized indicates invalid credentials (401)
+	ReasonUnauthorized = "Unauthorized"
+	// ReasonForbidden indicates insufficient permissions (403)
+	ReasonForbidden = "Forbidden"
+	// ReasonNotFound indicates the endpoint was not found (404)
+	ReasonNotFound = "NotFound"
+	// ReasonTooManyRequests indicates rate limiting (429)
+	ReasonTooManyRequests = "TooManyRequests"
+	// ReasonServerError indicates a server-side error (5xx)
+	ReasonServerError = "ServerError"
+	// ReasonConnected indicates successful connection
+	ReasonConnected = "Connected"
+)
+
+// Connection status values
+const (
+	ConnectionStatusConnected    = "Connected"
+	ConnectionStatusDisconnected = "Disconnected"
+)
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
