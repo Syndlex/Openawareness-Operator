@@ -39,10 +39,71 @@ type MimirAlertTenantSpec struct {
 	AlertmanagerConfig string `json:"alertmanagerConfig"`
 }
 
+// Condition types for MimirAlertTenant
+const (
+	// ConditionTypeConfigValid indicates whether the Alertmanager configuration is valid
+	ConditionTypeConfigValid = "ConfigValid"
+	// ConditionTypeSynced indicates whether the configuration has been synced to Mimir
+	ConditionTypeSynced = "Synced"
+)
+
+// Condition reasons for MimirAlertTenant
+const (
+	// Configuration validation reasons
+	ReasonInvalidYAML               = "InvalidYAML"
+	ReasonInvalidAlertmanagerConfig = "InvalidAlertmanagerConfig"
+	ReasonMissingTemplates          = "MissingTemplates"
+	ReasonInvalidTemplateFormat     = "InvalidTemplateFormat"
+	ReasonConfigValidated           = "ConfigValidated"
+
+	// Resource/annotation reasons
+	ReasonMissingAnnotations = "MissingAnnotations"
+	ReasonMissingClientName  = "MissingClientName"
+	ReasonClientNotFound     = "ClientNotFound"
+	ReasonClientNotReady     = "ClientNotReady"
+
+	// API/network reasons (reusing from ClientConfig where possible)
+	ReasonConflict = "Conflict"
+
+	// Success reasons
+	ReasonSynced = "Synced"
+)
+
+// Sync status values
+const (
+	SyncStatusSynced  = "Synced"
+	SyncStatusFailed  = "Failed"
+	SyncStatusPending = "Pending"
+)
+
+// Configuration validation values
+const (
+	ConfigValidationValid   = "Valid"
+	ConfigValidationInvalid = "Invalid"
+)
+
 // MimirAlertTenantStatus defines the observed state of MimirAlertTenant
 type MimirAlertTenantStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Conditions represent the latest available observations of the MimirAlertTenant's state
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	// LastSyncTime is the timestamp of the last successful sync to Mimir
+	// +optional
+	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
+
+	// SyncStatus indicates the current state of the alertmanager configuration
+	// Possible values: "Synced", "Failed", "Pending"
+	// +optional
+	SyncStatus string `json:"syncStatus,omitempty"`
+
+	// ErrorMessage contains detailed error information if sync failed
+	// +optional
+	ErrorMessage string `json:"errorMessage,omitempty"`
+
+	// ConfigurationValidation indicates whether the alertmanager config is valid
+	// +optional
+	ConfigurationValidation string `json:"configurationValidation,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -86,6 +147,110 @@ func (tenant *MimirAlertTenant) ValidateAlertmanagerConfig() error {
 	}
 
 	return nil
+}
+
+// SetSyncedCondition updates the status to indicate successful sync to Mimir.
+func (tenant *MimirAlertTenant) SetSyncedCondition() {
+	now := metav1.Now()
+	tenant.Status.LastSyncTime = &now
+	tenant.Status.SyncStatus = SyncStatusSynced
+	tenant.Status.ErrorMessage = ""
+	tenant.Status.ConfigurationValidation = ConfigValidationValid
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             ReasonSynced,
+		Message:            "Alertmanager configuration successfully synced to Mimir",
+		LastTransitionTime: now,
+	})
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeConfigValid,
+		Status:             metav1.ConditionTrue,
+		Reason:             ReasonConfigValidated,
+		Message:            "Alertmanager configuration is valid",
+		LastTransitionTime: now,
+	})
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeSynced,
+		Status:             metav1.ConditionTrue,
+		Reason:             ReasonSynced,
+		Message:            "Configuration synced to Mimir",
+		LastTransitionTime: now,
+	})
+}
+
+// SetFailedCondition updates the status to indicate a failed sync to Mimir.
+func (tenant *MimirAlertTenant) SetFailedCondition(reason, message string) {
+	now := metav1.Now()
+	tenant.Status.SyncStatus = SyncStatusFailed
+	tenant.Status.ErrorMessage = message
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: now,
+	})
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeSynced,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: now,
+	})
+}
+
+// SetConfigInvalidCondition updates the status to indicate invalid configuration.
+func (tenant *MimirAlertTenant) SetConfigInvalidCondition(reason, message string) {
+	now := metav1.Now()
+	tenant.Status.SyncStatus = SyncStatusFailed
+	tenant.Status.ErrorMessage = message
+	tenant.Status.ConfigurationValidation = ConfigValidationInvalid
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: now,
+	})
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeConfigValid,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: now,
+	})
+
+	tenant.setCondition(metav1.Condition{
+		Type:               ConditionTypeSynced,
+		Status:             metav1.ConditionFalse,
+		Reason:             reason,
+		Message:            "Cannot sync invalid configuration",
+		LastTransitionTime: now,
+	})
+}
+
+// setCondition sets or updates a condition in the status.
+// If a condition with the same type exists, it updates it; otherwise, it appends the new condition.
+func (tenant *MimirAlertTenant) setCondition(newCondition metav1.Condition) {
+	existingConditions := tenant.Status.Conditions
+	for i, condition := range existingConditions {
+		if condition.Type == newCondition.Type {
+			// Update existing condition
+			existingConditions[i] = newCondition
+			tenant.Status.Conditions = existingConditions
+			return
+		}
+	}
+	// Append new condition
+	tenant.Status.Conditions = append(existingConditions, newCondition)
 }
 
 // +kubebuilder:object:root=true

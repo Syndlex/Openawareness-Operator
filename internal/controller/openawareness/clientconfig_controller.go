@@ -18,8 +18,6 @@ package openawareness
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +35,7 @@ import (
 // ClientConfigReconciler reconciles a ClientConfig object
 type ClientConfigReconciler struct {
 	k8sClient.Client
-	RulerClients *clients.RulerClientCache
+	RulerClients clients.RulerClientCacheInterface
 	Scheme       *runtime.Scheme
 }
 
@@ -140,7 +138,7 @@ func (r *ClientConfigReconciler) updateStatusConnected(ctx context.Context, clie
 		Message:            "Successfully connected to endpoint",
 	}
 
-	setCondition(&clientConfig.Status.Conditions, condition)
+	utils.SetCondition(&clientConfig.Status.Conditions, condition)
 
 	return r.Status().Update(ctx, clientConfig)
 }
@@ -152,8 +150,8 @@ func (r *ClientConfigReconciler) updateStatusDisconnected(ctx context.Context, c
 	clientConfig.Status.ConnectionStatus = openawarenessv1beta1.ConnectionStatusDisconnected
 	clientConfig.Status.ErrorMessage = err.Error()
 
-	// Determine the reason based on the error type
-	reason, message := categorizeError(err)
+	// Determine the reason based on the error type using shared utility
+	reason, message := utils.CategorizeError(err)
 
 	// Update conditions
 	condition := metav1.Condition{
@@ -165,82 +163,9 @@ func (r *ClientConfigReconciler) updateStatusDisconnected(ctx context.Context, c
 		Message:            message,
 	}
 
-	setCondition(&clientConfig.Status.Conditions, condition)
+	utils.SetCondition(&clientConfig.Status.Conditions, condition)
 
 	return r.Status().Update(ctx, clientConfig)
-}
-
-// categorizeError determines the appropriate reason and message for a connection error
-func categorizeError(err error) (string, string) {
-	errMsg := err.Error()
-
-	// Check for DNS errors (highest priority for network errors)
-	if strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "dns") {
-		return openawarenessv1beta1.ReasonDNSResolutionError, "DNS resolution failed"
-	}
-
-	// Check for timeout errors
-	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "i/o timeout") {
-		return openawarenessv1beta1.ReasonTimeoutError, "Connection timeout"
-	}
-
-	// Check for connection refused or network errors
-	if strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "connection reset") ||
-		strings.Contains(errMsg, "network") || strings.Contains(errMsg, "dial tcp") ||
-		strings.Contains(errMsg, "dial udp") {
-		return openawarenessv1beta1.ReasonNetworkError, "Network connection error"
-	}
-
-	// Check for URL parsing errors (check after network errors since parse errors might mention "dial")
-	if strings.Contains(errMsg, "missing protocol scheme") || strings.Contains(errMsg, "invalid URL") ||
-		strings.Contains(errMsg, "unsupported protocol") {
-		return openawarenessv1beta1.ReasonInvalidURL, "Invalid URL format"
-	}
-
-	// Check for TLS errors
-	if strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "x509") {
-		return openawarenessv1beta1.ReasonInvalidTLSConfig, "TLS configuration error"
-	}
-
-	// Check for HTTP status code errors
-	if strings.Contains(errMsg, "401") {
-		return openawarenessv1beta1.ReasonUnauthorized, "Authentication failed"
-	}
-	if strings.Contains(errMsg, "403") {
-		return openawarenessv1beta1.ReasonForbidden, "Access forbidden"
-	}
-	if strings.Contains(errMsg, "404") {
-		return openawarenessv1beta1.ReasonNotFound, "Endpoint not found"
-	}
-	if strings.Contains(errMsg, "429") {
-		return openawarenessv1beta1.ReasonTooManyRequests, "Rate limit exceeded"
-	}
-	if strings.Contains(errMsg, "500") || strings.Contains(errMsg, "502") ||
-		strings.Contains(errMsg, "503") || strings.Contains(errMsg, "504") {
-		return openawarenessv1beta1.ReasonServerError, "Server error"
-	}
-
-	// Default to network error for unknown errors
-	return openawarenessv1beta1.ReasonNetworkError, fmt.Sprintf("Connection failed: %s", errMsg)
-}
-
-// setCondition sets or updates a condition in the conditions list
-func setCondition(conditions *[]metav1.Condition, newCondition metav1.Condition) {
-	if conditions == nil {
-		*conditions = []metav1.Condition{}
-	}
-
-	// Find existing condition of the same type
-	for i, condition := range *conditions {
-		if condition.Type == newCondition.Type {
-			// Update existing condition
-			(*conditions)[i] = newCondition
-			return
-		}
-	}
-
-	// Condition doesn't exist, append it
-	*conditions = append(*conditions, newCondition)
 }
 
 // SetupWithManager sets up the controller with the Manager.

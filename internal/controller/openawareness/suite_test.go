@@ -28,12 +28,14 @@ import (
 
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
+	"github.com/syndlex/openawareness-controller/internal/clients"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -45,6 +47,7 @@ var testClient client.Client
 var testEnv *envtest.Environment
 var ctx context.Context
 var cancel context.CancelFunc
+var k8sManager ctrl.Manager
 
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -85,6 +88,27 @@ var _ = BeforeSuite(func() {
 	testClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(testClient).NotTo(BeNil())
+
+	By("creating controller manager")
+	k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("setting up ClientConfig controller with mock cache")
+	err = (&ClientConfigReconciler{
+		Client:       k8sManager.GetClient(),
+		RulerClients: clients.NewMockRulerClientCache(),
+		Scheme:       k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("starting controller manager")
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).NotTo(HaveOccurred(), "failed to run manager")
+	}()
 
 })
 

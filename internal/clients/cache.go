@@ -10,6 +10,14 @@ import (
 	"github.com/syndlex/openawareness-controller/internal/mimir"
 )
 
+// RulerClientCacheInterface defines the interface for managing ruler clients
+type RulerClientCacheInterface interface {
+	AddMimirClient(address string, name string, ctx context.Context) error
+	AddPromClient(address string, name string, ctx context.Context) error
+	RemoveClient(name string)
+	GetClient(name string) (AwarenessClient, error)
+}
+
 type AwarenessClient interface {
 	CreateRuleGroup(ctx context.Context, namespace string, rg rulefmt.RuleGroup) error
 	DeleteRuleGroup(ctx context.Context, namespace, groupName string) error
@@ -24,6 +32,9 @@ type AwarenessClient interface {
 type RulerClientCache struct {
 	clients map[string]AwarenessClient
 }
+
+// Ensure RulerClientCache implements RulerClientCacheInterface
+var _ RulerClientCacheInterface = (*RulerClientCache)(nil)
 
 func NewRulerClientCache() *RulerClientCache {
 	return &RulerClientCache{

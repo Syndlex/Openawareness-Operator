@@ -85,6 +85,11 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			logger.Error(err, "Invalid Alertmanager configuration",
 				"name", rule.Name,
 				"namespace", rule.Namespace)
+			rule.SetConfigInvalidCondition(openawarenessv1beta1.ReasonInvalidYAML, err.Error())
+			if updateErr := r.Status().Update(ctx, rule); updateErr != nil {
+				logger.Error(updateErr, "Failed to update status")
+				return ctrl.Result{}, updateErr
+			}
 			return ctrl.Result{}, err
 		}
 
@@ -96,12 +101,26 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			logger.Error(err, "Failed to create Alertmanager configuration",
 				"name", rule.Name,
 				"namespace", rule.Namespace)
+
+			// Categorize the error and set appropriate status using shared utility
+			reason, _ := utils.CategorizeError(err)
+			rule.SetFailedCondition(reason, err.Error())
+			if updateErr := r.Status().Update(ctx, rule); updateErr != nil {
+				logger.Error(updateErr, "Failed to update status")
+			}
 			return ctrl.Result{}, err
 		}
 
 		logger.Info("Successfully created Alertmanager configuration",
 			"name", rule.Name,
 			"namespace", rule.Namespace)
+
+		// Update status to reflect successful sync
+		rule.SetSyncedCondition()
+		if err := r.Status().Update(ctx, rule); err != nil {
+			logger.Error(err, "Failed to update status after successful sync")
+			return ctrl.Result{}, err
+		}
 
 	} else {
 		// The object is being deleted

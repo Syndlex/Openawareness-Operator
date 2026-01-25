@@ -49,7 +49,13 @@ var _ = Describe("ClientConfig Controller", func() {
 			clientConfig := &openawarenessv1beta1.ClientConfig{}
 			err := testClient.Get(ctx, typeNamespacedName, clientConfig)
 			if err == nil {
+				By("Cleaning up existing ClientConfig")
 				Expect(testClient.Delete(ctx, clientConfig)).To(Succeed())
+				// Wait for deletion to complete
+				Eventually(func() bool {
+					err := testClient.Get(ctx, typeNamespacedName, clientConfig)
+					return err != nil
+				}, timeout, interval).Should(BeTrue())
 			}
 		})
 
@@ -58,7 +64,13 @@ var _ = Describe("ClientConfig Controller", func() {
 			clientConfig := &openawarenessv1beta1.ClientConfig{}
 			err := testClient.Get(ctx, typeNamespacedName, clientConfig)
 			if err == nil {
+				By("Cleaning up ClientConfig in AfterEach")
 				Expect(testClient.Delete(ctx, clientConfig)).To(Succeed())
+				// Wait for deletion to complete
+				Eventually(func() bool {
+					err := testClient.Get(ctx, typeNamespacedName, clientConfig)
+					return err != nil
+				}, timeout, interval).Should(BeTrue())
 			}
 		})
 

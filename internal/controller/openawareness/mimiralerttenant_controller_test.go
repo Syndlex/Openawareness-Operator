@@ -176,4 +176,166 @@ receivers:
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Context("When updating status conditions", func() {
+		It("should set synced condition correctly", func() {
+			resource := &openawarenessv1beta1.MimirAlertTenant{}
+
+			resource.SetSyncedCondition()
+
+			By("Verifying sync status is Synced")
+			Expect(resource.Status.SyncStatus).To(Equal(openawarenessv1beta1.SyncStatusSynced))
+
+			By("Verifying LastSyncTime is set")
+			Expect(resource.Status.LastSyncTime).NotTo(BeNil())
+
+			By("Verifying ErrorMessage is empty")
+			Expect(resource.Status.ErrorMessage).To(BeEmpty())
+
+			By("Verifying ConfigurationValidation is Valid")
+			Expect(resource.Status.ConfigurationValidation).To(Equal(openawarenessv1beta1.ConfigValidationValid))
+
+			By("Verifying Ready condition is True")
+			var readyCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeReady {
+					readyCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
+			Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonSynced))
+
+			By("Verifying ConfigValid condition is True")
+			var configValidCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeConfigValid {
+					configValidCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(configValidCondition).NotTo(BeNil())
+			Expect(configValidCondition.Status).To(Equal(metav1.ConditionTrue))
+
+			By("Verifying Synced condition is True")
+			var syncedCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeSynced {
+					syncedCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(syncedCondition).NotTo(BeNil())
+			Expect(syncedCondition.Status).To(Equal(metav1.ConditionTrue))
+		})
+
+		It("should set failed condition correctly", func() {
+			resource := &openawarenessv1beta1.MimirAlertTenant{}
+
+			resource.SetFailedCondition(openawarenessv1beta1.ReasonNetworkError, "Failed to connect to Mimir")
+
+			By("Verifying sync status is Failed")
+			Expect(resource.Status.SyncStatus).To(Equal(openawarenessv1beta1.SyncStatusFailed))
+
+			By("Verifying ErrorMessage is set")
+			Expect(resource.Status.ErrorMessage).To(Equal("Failed to connect to Mimir"))
+
+			By("Verifying Ready condition is False")
+			var readyCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeReady {
+					readyCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonNetworkError))
+
+			By("Verifying Synced condition is False")
+			var syncedCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeSynced {
+					syncedCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(syncedCondition).NotTo(BeNil())
+			Expect(syncedCondition.Status).To(Equal(metav1.ConditionFalse))
+		})
+
+		It("should set config invalid condition correctly", func() {
+			resource := &openawarenessv1beta1.MimirAlertTenant{}
+
+			resource.SetConfigInvalidCondition(openawarenessv1beta1.ReasonInvalidYAML, "Invalid YAML syntax")
+
+			By("Verifying sync status is Failed")
+			Expect(resource.Status.SyncStatus).To(Equal(openawarenessv1beta1.SyncStatusFailed))
+
+			By("Verifying ErrorMessage is set")
+			Expect(resource.Status.ErrorMessage).To(Equal("Invalid YAML syntax"))
+
+			By("Verifying ConfigurationValidation is Invalid")
+			Expect(resource.Status.ConfigurationValidation).To(Equal(openawarenessv1beta1.ConfigValidationInvalid))
+
+			By("Verifying Ready condition is False")
+			var readyCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeReady {
+					readyCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+
+			By("Verifying ConfigValid condition is False")
+			var configValidCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeConfigValid {
+					configValidCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(configValidCondition).NotTo(BeNil())
+			Expect(configValidCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(configValidCondition.Reason).To(Equal(openawarenessv1beta1.ReasonInvalidYAML))
+
+			By("Verifying Synced condition is False")
+			var syncedCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeSynced {
+					syncedCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(syncedCondition).NotTo(BeNil())
+			Expect(syncedCondition.Status).To(Equal(metav1.ConditionFalse))
+		})
+
+		It("should update existing conditions rather than duplicate", func() {
+			resource := &openawarenessv1beta1.MimirAlertTenant{}
+
+			By("Setting synced condition first")
+			resource.SetSyncedCondition()
+			Expect(resource.Status.Conditions).To(HaveLen(3))
+
+			By("Setting failed condition which should update existing conditions")
+			resource.SetFailedCondition(openawarenessv1beta1.ReasonNetworkError, "Network error")
+			Expect(resource.Status.Conditions).To(HaveLen(3)) // Should still be 3, not 6
+
+			By("Verifying conditions were updated, not duplicated")
+			var readyCondition *metav1.Condition
+			for i, c := range resource.Status.Conditions {
+				if c.Type == openawarenessv1beta1.ConditionTypeReady {
+					readyCondition = &resource.Status.Conditions[i]
+					break
+				}
+			}
+			Expect(readyCondition).NotTo(BeNil())
+			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonNetworkError))
+		})
+	})
 })
