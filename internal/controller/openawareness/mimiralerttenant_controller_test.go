@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/syndlex/openawareness-controller/test/helper"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -196,36 +197,18 @@ receivers:
 			Expect(resource.Status.ConfigurationValidation).To(Equal(openawarenessv1beta1.ConfigValidationValid))
 
 			By("Verifying Ready condition is True")
-			var readyCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeReady {
-					readyCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			readyCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeReady)
 			Expect(readyCondition).NotTo(BeNil())
 			Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
 			Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonSynced))
 
 			By("Verifying ConfigValid condition is True")
-			var configValidCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeConfigValid {
-					configValidCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			configValidCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeConfigValid)
 			Expect(configValidCondition).NotTo(BeNil())
 			Expect(configValidCondition.Status).To(Equal(metav1.ConditionTrue))
 
 			By("Verifying Synced condition is True")
-			var syncedCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeSynced {
-					syncedCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			syncedCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeSynced)
 			Expect(syncedCondition).NotTo(BeNil())
 			Expect(syncedCondition.Status).To(Equal(metav1.ConditionTrue))
 		})
@@ -242,25 +225,13 @@ receivers:
 			Expect(resource.Status.ErrorMessage).To(Equal("Failed to connect to Mimir"))
 
 			By("Verifying Ready condition is False")
-			var readyCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeReady {
-					readyCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			readyCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeReady)
 			Expect(readyCondition).NotTo(BeNil())
 			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
 			Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonNetworkError))
 
 			By("Verifying Synced condition is False")
-			var syncedCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeSynced {
-					syncedCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			syncedCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeSynced)
 			Expect(syncedCondition).NotTo(BeNil())
 			Expect(syncedCondition.Status).To(Equal(metav1.ConditionFalse))
 		})
@@ -280,36 +251,18 @@ receivers:
 			Expect(resource.Status.ConfigurationValidation).To(Equal(openawarenessv1beta1.ConfigValidationInvalid))
 
 			By("Verifying Ready condition is False")
-			var readyCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeReady {
-					readyCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			readyCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeReady)
 			Expect(readyCondition).NotTo(BeNil())
 			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
 
 			By("Verifying ConfigValid condition is False")
-			var configValidCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeConfigValid {
-					configValidCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			configValidCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeConfigValid)
 			Expect(configValidCondition).NotTo(BeNil())
 			Expect(configValidCondition.Status).To(Equal(metav1.ConditionFalse))
 			Expect(configValidCondition.Reason).To(Equal(openawarenessv1beta1.ReasonInvalidYAML))
 
 			By("Verifying Synced condition is False")
-			var syncedCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeSynced {
-					syncedCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			syncedCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeSynced)
 			Expect(syncedCondition).NotTo(BeNil())
 			Expect(syncedCondition.Status).To(Equal(metav1.ConditionFalse))
 		})
@@ -326,13 +279,7 @@ receivers:
 			Expect(resource.Status.Conditions).To(HaveLen(3)) // Should still be 3, not 6
 
 			By("Verifying conditions were updated, not duplicated")
-			var readyCondition *metav1.Condition
-			for i, c := range resource.Status.Conditions {
-				if c.Type == openawarenessv1beta1.ConditionTypeReady {
-					readyCondition = &resource.Status.Conditions[i]
-					break
-				}
-			}
+			readyCondition := helper.FindCondition(resource.Status.Conditions, openawarenessv1beta1.ConditionTypeReady)
 			Expect(readyCondition).NotTo(BeNil())
 			Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
 			Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonNetworkError))

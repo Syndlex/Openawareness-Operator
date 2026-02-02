@@ -37,6 +37,14 @@ const (
 	Prometheus ClientType = "prometheus"
 )
 
+// ConnectionStatus represents the connection state of a ClientConfig
+type ConnectionStatus string
+
+const (
+	ConnectionStatusConnected    ConnectionStatus = "Connected"
+	ConnectionStatusDisconnected ConnectionStatus = "Disconnected"
+)
+
 // ClientConfigStatus defines the observed state of ClientConfig
 type ClientConfigStatus struct {
 	// Conditions represent the latest available observations of the ClientConfig's state
@@ -48,9 +56,8 @@ type ClientConfigStatus struct {
 	LastConnectionTime *metav1.Time `json:"lastConnectionTime,omitempty"`
 
 	// ConnectionStatus indicates whether the client can connect to Mimir/Prometheus
-	// Possible values: "Connected", "Disconnected", "Unknown"
 	// +optional
-	ConnectionStatus string `json:"connectionStatus,omitempty"`
+	ConnectionStatus ConnectionStatus `json:"connectionStatus,omitempty"`
 
 	// ErrorMessage contains the last error message if connection failed
 	// +optional
@@ -93,12 +100,6 @@ const (
 	ReasonConnected = "Connected"
 	// ReasonMissingAnnotation indicates a required annotation is missing
 	ReasonMissingAnnotation = "MissingAnnotation"
-)
-
-// Connection status values
-const (
-	ConnectionStatusConnected    = "Connected"
-	ConnectionStatusDisconnected = "Disconnected"
 )
 
 // +kubebuilder:object:root=true

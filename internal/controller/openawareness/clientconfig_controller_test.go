@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/syndlex/openawareness-controller/internal/controller/utils"
+	"github.com/syndlex/openawareness-controller/test/helper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -132,16 +133,16 @@ var _ = Describe("ClientConfig Controller", func() {
 				}, timeout, interval).Should(BeTrue())
 
 				By("Verifying ConnectionStatus is Disconnected")
-				Expect(clientConfig.Status.ConnectionStatus).To(Equal("Disconnected"))
+				Expect(clientConfig.Status.ConnectionStatus).To(Equal(openawarenessv1beta1.ConnectionStatusDisconnected))
 
 				By("Verifying error condition exists")
 				conditions := clientConfig.Status.Conditions
 				Expect(len(conditions)).To(BeNumerically(">", 0))
 
-				readyCondition := findCondition(conditions, "Ready")
+				readyCondition := helper.FindCondition(conditions, openawarenessv1beta1.ConditionTypeReady)
 				Expect(readyCondition).NotTo(BeNil())
 				Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
-				Expect(readyCondition.Reason).To(Equal("InvalidURL"))
+				Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonInvalidURL))
 			})
 		})
 
@@ -152,6 +153,9 @@ var _ = Describe("ClientConfig Controller", func() {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      ClientConfigName,
 						Namespace: ClientConfigNamespace,
+						Annotations: map[string]string{
+							utils.MimirTenantAnnotation: "test-tenant",
+						},
 					},
 					Spec: openawarenessv1beta1.ClientConfigSpec{
 						Address: "http://unreachable-host-12345.local:9009",
@@ -170,7 +174,7 @@ var _ = Describe("ClientConfig Controller", func() {
 				}, timeout, interval).Should(BeTrue())
 
 				By("Verifying ConnectionStatus is Disconnected")
-				Expect(clientConfig.Status.ConnectionStatus).To(Equal("Disconnected"))
+				Expect(clientConfig.Status.ConnectionStatus).To(Equal(openawarenessv1beta1.ConnectionStatusDisconnected))
 
 				By("Verifying error message contains network error details")
 				Expect(clientConfig.Status.ErrorMessage).NotTo(BeEmpty())
@@ -213,13 +217,3 @@ var _ = Describe("ClientConfig Controller", func() {
 		})
 	})
 })
-
-// Helper function to find a condition by type
-func findCondition(conditions []metav1.Condition, conditionType string) *metav1.Condition {
-	for i := range conditions {
-		if conditions[i].Type == conditionType {
-			return &conditions[i]
-		}
-	}
-	return nil
-}

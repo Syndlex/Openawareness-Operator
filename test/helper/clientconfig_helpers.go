@@ -98,18 +98,18 @@ func WaitForConnectionStatus(
 	ctx context.Context,
 	k8sClient client.Client,
 	name, namespace string,
-	expectedStatus string,
+	expectedStatus openawarenessv1beta1.ConnectionStatus,
 	timeout, interval time.Duration,
 ) (*openawarenessv1beta1.ClientConfig, error) {
 	clientConfig := &openawarenessv1beta1.ClientConfig{}
 	namespacedName := types.NamespacedName{Name: name, Namespace: namespace}
 
-	Eventually(func() string {
+	Eventually(func() openawarenessv1beta1.ConnectionStatus {
 		if err := k8sClient.Get(ctx, namespacedName, clientConfig); err != nil {
 			return ""
 		}
 		return clientConfig.Status.ConnectionStatus
-	}, timeout, interval).Should(Equal(expectedStatus), "ConnectionStatus should be "+expectedStatus)
+	}, timeout, interval).Should(Equal(expectedStatus), "ConnectionStatus should be "+string(expectedStatus))
 
 	return clientConfig, nil
 }
@@ -205,26 +205,15 @@ func AddClientConfigAnnotation(
 	return nil
 }
 
-// FindCondition finds a condition by type in a list of conditions.
-// Returns nil if the condition is not found.
-func FindCondition(conditions []metav1.Condition, conditionType string) *metav1.Condition {
-	for i := range conditions {
-		if conditions[i].Type == conditionType {
-			return &conditions[i]
-		}
-	}
-	return nil
-}
-
 // VerifyConnectedStatus verifies that a ClientConfig has Connected status with proper conditions.
 func VerifyConnectedStatus(clientConfig *openawarenessv1beta1.ClientConfig) {
-	Expect(clientConfig.Status.ConnectionStatus).To(Equal("Connected"))
+	Expect(clientConfig.Status.ConnectionStatus).To(Equal(openawarenessv1beta1.ConnectionStatusConnected))
 	Expect(clientConfig.Status.Conditions).NotTo(BeEmpty())
 
-	readyCondition := FindCondition(clientConfig.Status.Conditions, "Ready")
+	readyCondition := FindCondition(clientConfig.Status.Conditions, openawarenessv1beta1.ConditionTypeReady)
 	Expect(readyCondition).NotTo(BeNil())
 	Expect(readyCondition.Status).To(Equal(metav1.ConditionTrue))
-	Expect(readyCondition.Reason).To(Equal("Connected"))
+	Expect(readyCondition.Reason).To(Equal(openawarenessv1beta1.ReasonConnected))
 
 	Expect(clientConfig.Status.LastConnectionTime).NotTo(BeNil())
 	Expect(clientConfig.Status.ErrorMessage).To(BeEmpty())
@@ -232,10 +221,10 @@ func VerifyConnectedStatus(clientConfig *openawarenessv1beta1.ClientConfig) {
 
 // VerifyDisconnectedStatus verifies that a ClientConfig has Disconnected status with proper conditions.
 func VerifyDisconnectedStatus(clientConfig *openawarenessv1beta1.ClientConfig, expectedReason string) {
-	Expect(clientConfig.Status.ConnectionStatus).To(Equal("Disconnected"))
+	Expect(clientConfig.Status.ConnectionStatus).To(Equal(openawarenessv1beta1.ConnectionStatusDisconnected))
 	Expect(clientConfig.Status.Conditions).NotTo(BeEmpty())
 
-	readyCondition := FindCondition(clientConfig.Status.Conditions, "Ready")
+	readyCondition := FindCondition(clientConfig.Status.Conditions, openawarenessv1beta1.ConditionTypeReady)
 	Expect(readyCondition).NotTo(BeNil())
 	Expect(readyCondition.Status).To(Equal(metav1.ConditionFalse))
 

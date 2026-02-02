@@ -35,7 +35,7 @@ import (
 // MimirAlertTenantReconciler reconciles a MimirAlertTenant object
 type MimirAlertTenantReconciler struct {
 	k8sClient.Client
-	RulerClients *clients.RulerClientCache
+	RulerClients clients.RulerClientCacheInterface
 	Scheme       *runtime.Scheme
 }
 
@@ -77,7 +77,7 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 
 		// Get the alertmanager client
-		alertManagerClient, err := r.clientFromCrd(logger, rule)
+		alertManagerClient, err := r.clientFromCrd(ctx, logger, rule)
 		if err != nil {
 			logger.Error(err, "Failed to get Alertmanager client",
 				"name", rule.Name,
@@ -131,13 +131,15 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	} else {
 		// The object is being deleted
 		// Get the alertmanager client for cleanup
-		alertManagerClient, err := r.clientFromCrd(logger, rule)
+		alertManagerClient, err := r.clientFromCrd(ctx, logger, rule)
 		if err != nil {
-			logger.Error(err, "Failed to get Alertmanager client for deletion",
+			logger.Error(err, "Failed to get Alertmanager client for deletion - configuration may be orphaned in Mimir",
 				"name", rule.Name,
-				"namespace", rule.Namespace)
+				"namespace", rule.Namespace,
+				"warning", "Unable to cleanup Alertmanager configuration from Mimir API")
 			// If we can't get the client, we still need to remove the finalizer
-			// to allow deletion to proceed
+			// to allow deletion to proceed. This may leave orphaned configuration in Mimir.
+			// Operators should manually clean up if needed.
 			if controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
 				controllerutil.RemoveFinalizer(rule, utils.MyFinalizerName)
 				if err := r.Update(ctx, rule); err != nil {
@@ -149,10 +151,16 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 		err = alertManagerClient.DeleteAlermanagerConfig(ctx)
 		if err != nil {
-			logger.Error(err, "Failed to delete Alertmanager configuration",
+			logger.Error(err, "Failed to delete Alertmanager configuration - configuration may be orphaned in Mimir",
+				"name", rule.Name,
+				"namespace", rule.Namespace,
+				"warning", "Alertmanager configuration may still exist in Mimir API")
+			// Continue with finalizer removal even if deletion fails to prevent resource from being stuck.
+			// This may leave orphaned configuration in Mimir. Operators should manually clean up if needed.
+		} else {
+			logger.Info("Successfully deleted Alertmanager configuration from Mimir",
 				"name", rule.Name,
 				"namespace", rule.Namespace)
-			// Continue with finalizer removal even if deletion fails
 		}
 
 		// Remove finalizer
@@ -174,32 +182,25 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 // It extracts the client name and tenant ID from the resource's annotations,
 // fetches the ClientConfig, and returns a tenant-specific Mimir client.
 // Returns an error if annotations are missing or if the client cannot be created.
-func (r *MimirAlertTenantReconciler) clientFromCrd(logger logr.Logger, rule *openawarenessv1beta1.MimirAlertTenant) (clients.AwarenessClient, error) {
+func (r *MimirAlertTenantReconciler) clientFromCrd(ctx context.Context, logger logr.Logger, rule *openawarenessv1beta1.MimirAlertTenant) (clients.AwarenessClient, error) {
 	if r.RulerClients == nil {
 		logger.Info("RulerClients cache is not initialized")
 		return nil, fmt.Errorf("ruler clients cache is nil for MimirAlertTenant %s/%s", rule.Namespace, rule.Name)
 	}
 
-	if rule.Annotations == nil {
-		logger.Info("MimirAlertTenant is missing required annotations", "name", rule.Name)
-		return nil, fmt.Errorf("annotations are missing for MimirAlertTenant %s/%s", rule.Namespace, rule.Name)
+	// Extract and validate required annotations
+	annotations, err := utils.GetRequiredAnnotations(rule, utils.ClientNameAnnotation, utils.MimirTenantAnnotation)
+	if err != nil {
+		logger.Info("MimirAlertTenant is missing required annotations", "name", rule.Name, "error", err.Error())
+		return nil, err
 	}
 
-	clientName := rule.Annotations[utils.ClientNameAnnotation]
-	if clientName == "" {
-		logger.Info("MimirAlertTenant is missing '"+utils.ClientNameAnnotation+"' annotation", "name", rule.Name)
-		return nil, fmt.Errorf("annotation %s is empty for MimirAlertTenant %s/%s", utils.ClientNameAnnotation, rule.Namespace, rule.Name)
-	}
-
-	tenantID := rule.Annotations[utils.MimirTenantAnnotation]
-	if tenantID == "" {
-		logger.Info("MimirAlertTenant is missing '"+utils.MimirTenantAnnotation+"' annotation", "name", rule.Name)
-		return nil, fmt.Errorf("annotation %s is empty for MimirAlertTenant %s/%s", utils.MimirTenantAnnotation, rule.Namespace, rule.Name)
-	}
+	clientName := annotations[utils.ClientNameAnnotation]
+	tenantID := annotations[utils.MimirTenantAnnotation]
 
 	// Get the ClientConfig to retrieve the Mimir address
 	clientConfig := &openawarenessv1beta1.ClientConfig{}
-	if err := r.Get(context.Background(), k8sClient.ObjectKey{
+	if err := r.Get(ctx, k8sClient.ObjectKey{
 		Name:      clientName,
 		Namespace: rule.Namespace,
 	}, clientConfig); err != nil {
@@ -212,7 +213,7 @@ func (r *MimirAlertTenantReconciler) clientFromCrd(logger logr.Logger, rule *ope
 		clientConfig.Spec.Address,
 		clientName,
 		tenantID,
-		context.Background(),
+		ctx,
 	)
 	if err != nil {
 		logger.Error(err, "Failed to get or create Mimir client",

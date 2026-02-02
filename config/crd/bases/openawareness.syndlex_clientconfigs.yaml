@@ -106,9 +106,8 @@ spec:
                   type: object
                 type: array
               connectionStatus:
-                description: |-
-                  ConnectionStatus indicates whether the client can connect to Mimir/Prometheus
-                  Possible values: "Connected", "Disconnected", "Unknown"
+                description: ConnectionStatus indicates whether the client can connect
+                  to Mimir/Prometheus
                 type: string
               errorMessage:
                 description: ErrorMessage contains the last error message if connection
