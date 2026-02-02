@@ -108,6 +108,16 @@ clean-mimir: ## Uninstall Mimir and clean up resources
 	@$(KUBECTL) delete namespace mimir --ignore-not-found=true
 	@echo "Mimir cleanup complete"
 
+.PHONY: mimir-port-forward
+mimir-port-forward: ensure-microk8s-context ## Port-forward Mimir gateway for local API access
+	@echo "Starting port-forward to Mimir gateway..."
+	@echo "Mimir API will be available at http://localhost:8080"
+	@echo "API endpoints:"
+	@echo "  - GET/POST/DELETE /api/v1/alerts (Alertmanager config)"
+	@echo "  - GET/POST/DELETE /prometheus/config/v1/rules (Prometheus rules)"
+	@echo "Press Ctrl+C to stop"
+	$(KUBECTL) port-forward -n mimir svc/mimir-gateway 8080:8080
+
 ##@ Build
 
 .PHONY: build

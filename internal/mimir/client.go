@@ -4,13 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/go-logr/logr"
 	"io"
 	"net/http"
 	"net/url"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 	"strings"
 	"time"
+
+	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/grafana/dskit/crypto/tls"
 	"github.com/grafana/dskit/user"
@@ -37,7 +38,7 @@ type Config struct {
 	User            string `yaml:"user"`
 	Key             string `yaml:"key"`
 	Address         string `yaml:"address"`
-	ID              string `yaml:"id"`
+	TenantId        string `yaml:"tenantid"`
 	TLS             tls.ClientConfig
 	UseLegacyRoutes bool              `yaml:"use_legacy_routes"`
 	MimirHTTPPrefix string            `yaml:"mimir_http_prefix"`
@@ -68,7 +69,7 @@ func New(cfg Config, ctx context.Context) (*MimirClient, error) {
 
 	log.Info("New Mimir client created",
 		"address", cfg.Address,
-		"id", cfg.ID)
+		"id", cfg.TenantId)
 
 	client := http.Client{}
 
@@ -102,7 +103,7 @@ func New(cfg Config, ctx context.Context) (*MimirClient, error) {
 	return &MimirClient{
 		user:         cfg.User,
 		key:          cfg.Key,
-		id:           cfg.ID,
+		id:           cfg.TenantId,
 		endpoint:     endpoint,
 		Client:       client,
 		apiPath:      path,

@@ -26,7 +26,7 @@ func NewMockRulerClientCache() *MockRulerClientCache {
 }
 
 // AddMimirClient simulates adding a Mimir client with validation
-func (m *MockRulerClientCache) AddMimirClient(address string, name string, ctx context.Context) error {
+func (m *MockRulerClientCache) AddMimirClient(address string, name string, tenantID string, ctx context.Context) error {
 	// Validate URL format
 	parsedURL, err := url.Parse(address)
 	if err != nil {
@@ -46,6 +46,24 @@ func (m *MockRulerClientCache) AddMimirClient(address string, name string, ctx c
 	// Simulate successful connection for valid URLs
 	m.clients[name] = &MockAwarenessClient{}
 	return nil
+}
+
+// GetOrCreateMimirClient gets an existing client or creates a new one for the given tenant
+func (m *MockRulerClientCache) GetOrCreateMimirClient(address string, clientName string, tenantID string, ctx context.Context) (AwarenessClient, error) {
+	// Create composite key: clientName + tenantID
+	cacheKey := fmt.Sprintf("%s-%s", clientName, tenantID)
+
+	// Check if client already exists
+	if client, exists := m.clients[cacheKey]; exists {
+		return client, nil
+	}
+
+	// Create new client with tenant ID
+	if err := m.AddMimirClient(address, cacheKey, tenantID, ctx); err != nil {
+		return nil, fmt.Errorf("creating Mimir client for tenant %s: %w", tenantID, err)
+	}
+
+	return m.clients[cacheKey], nil
 }
 
 // AddPromClient simulates adding a Prometheus client
@@ -102,4 +120,8 @@ func (m *MockAwarenessClient) DeleteAlermanagerConfig(ctx context.Context) error
 
 func (m *MockAwarenessClient) GetAlertmanagerConfig(ctx context.Context) (string, map[string]string, error) {
 	return "", nil, nil
+}
+
+func (m *MockAwarenessClient) GetAlertmanagerStatus(ctx context.Context) (string, error) {
+	return "", nil
 }

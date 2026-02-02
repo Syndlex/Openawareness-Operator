@@ -106,7 +106,7 @@ mimirtool alertmanager get
 
 ## Multi-Tenancy
 
-Each PrometheusRule uses the `openawareness.io/mimir-namespace` annotation to specify which Mimir tenant/namespace the rules belong to. This enables multi-tenant isolation:
+Each PrometheusRule uses the `openawareness.io/mimir-tenant` annotation to specify which Mimir tenant the rules belong to. This enables multi-tenant isolation:
 
 - Rules with namespace `devops-team` are isolated from other tenants
 - Different teams can have separate alert configurations

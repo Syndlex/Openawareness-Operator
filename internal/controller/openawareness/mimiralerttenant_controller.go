@@ -19,6 +19,7 @@ package openawareness
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/syndlex/openawareness-controller/internal/clients"
@@ -181,11 +182,42 @@ func (r *MimirAlertTenantReconciler) clientFromCrd(logger logr.Logger, rule *ope
 		return nil, errors.New("client-name annotation is empty")
 	}
 
-	alertManagerClient, err := r.RulerClients.GetClient(clientName)
+	tenantID := rule.Annotations[utils.MimirTenantAnnotation]
+	if tenantID == "" {
+		logger.Info("MimirAlertTenant is missing '"+utils.MimirTenantAnnotation+"' annotation", "name", rule.Name)
+		return nil, errors.New("mimir-tenant annotation is empty")
+	}
+
+	// Get the ClientConfig to retrieve the Mimir address
+	clientConfig := &openawarenessv1beta1.ClientConfig{}
+	if err := r.Get(context.Background(), k8sClient.ObjectKey{
+		Name:      clientName,
+		Namespace: rule.Namespace,
+	}, clientConfig); err != nil {
+		logger.Error(err, "Failed to get ClientConfig", "clientName", clientName)
+		return nil, fmt.Errorf("getting ClientConfig %s: %w", clientName, err)
+	}
+
+	// Get or create a client specific to this tenant
+	alertManagerClient, err := r.RulerClients.GetOrCreateMimirClient(
+		clientConfig.Spec.Address,
+		clientName,
+		tenantID,
+		context.Background(),
+	)
 	if err != nil {
-		logger.Info("Client does not exist", "clientName", clientName, "alertTenantName", rule.Name)
+		logger.Error(err, "Failed to get or create Mimir client",
+			"clientName", clientName,
+			"tenantID", tenantID,
+			"address", clientConfig.Spec.Address)
 		return nil, err
 	}
+
+	logger.Info("Got Mimir client for tenant",
+		"clientName", clientName,
+		"tenantID", tenantID,
+		"address", clientConfig.Spec.Address)
+
 	return alertManagerClient, nil
 }
 

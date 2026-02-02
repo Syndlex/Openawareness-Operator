@@ -39,7 +39,7 @@ metadata:
   name: team-alerts
   annotations:
     openawareness.io/client-name: "mimir-client"
-    openawareness.io/mimir-namespace: "devops-team"
+    openawareness.io/mimir-tenant: "devops-team"
 spec:
   templateFiles:
     default_template: |
@@ -81,7 +81,7 @@ metadata:
   name: example-rules
   annotations:
     openawareness.io/client-name: "mimir-client"
-    openawareness.io/mimir-namespace: "devops-team"
+    openawareness.io/mimir-tenant: "devops-team"
 spec:
   groups:
   - name: example
@@ -179,7 +179,7 @@ kubectl apply -f config/samples/promrule.yaml
 The controller uses annotations to determine routing and tenant isolation:
 
 - `openawareness.io/client-name`: References the ClientConfig to use for API calls
-- `openawareness.io/mimir-namespace`: Specifies the Mimir tenant/namespace
+- `openawareness.io/mimir-tenant`: Specifies the Mimir tenant/namespace
 
 ### Alertmanager Configuration
 
@@ -275,7 +275,7 @@ Each controller:
 ## Multi-Tenancy
 
 The controller supports multi-tenant deployments:
-- Use the `openawareness.io/mimir-namespace` annotation to specify tenants
+- Use the `openawareness.io/mimir-tenant` annotation to specify tenants
 - Each tenant has isolated alert rules and Alertmanager configurations
 - ClientConfigs can be shared across tenants or isolated per-tenant
 

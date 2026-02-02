@@ -12,10 +12,11 @@ import (
 
 // RulerClientCacheInterface defines the interface for managing ruler clients
 type RulerClientCacheInterface interface {
-	AddMimirClient(address string, name string, ctx context.Context) error
+	AddMimirClient(address string, name string, tenantID string, ctx context.Context) error
 	AddPromClient(address string, name string, ctx context.Context) error
 	RemoveClient(name string)
 	GetClient(name string) (AwarenessClient, error)
+	GetOrCreateMimirClient(address string, clientName string, tenantID string, ctx context.Context) (AwarenessClient, error)
 }
 
 type AwarenessClient interface {
@@ -27,6 +28,7 @@ type AwarenessClient interface {
 	CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string) error
 	DeleteAlermanagerConfig(ctx context.Context) error
 	GetAlertmanagerConfig(ctx context.Context) (string, map[string]string, error)
+	GetAlertmanagerStatus(ctx context.Context) (string, error)
 }
 
 type RulerClientCache struct {
@@ -42,12 +44,12 @@ func NewRulerClientCache() *RulerClientCache {
 	}
 }
 
-func (e *RulerClientCache) AddMimirClient(address string, name string, ctx context.Context) error {
+func (e *RulerClientCache) AddMimirClient(address string, name string, tenantID string, ctx context.Context) error {
 	client, err := mimir.New(mimir.Config{
 		User:            "",
 		Key:             "",
 		Address:         address,
-		ID:              "",
+		TenantId:        tenantID,
 		TLS:             tls.ClientConfig{},
 		UseLegacyRoutes: false,
 		MimirHTTPPrefix: "",
@@ -65,6 +67,25 @@ func (e *RulerClientCache) AddMimirClient(address string, name string, ctx conte
 
 	e.clients[name] = client
 	return nil
+}
+
+// GetOrCreateMimirClient gets an existing client or creates a new one for the given tenant.
+// The cache key is a combination of clientName and tenantID to support multi-tenancy.
+func (e *RulerClientCache) GetOrCreateMimirClient(address string, clientName string, tenantID string, ctx context.Context) (AwarenessClient, error) {
+	// Create composite key: clientName + tenantID
+	cacheKey := fmt.Sprintf("%s-%s", clientName, tenantID)
+
+	// Check if client already exists
+	if client, exists := e.clients[cacheKey]; exists {
+		return client, nil
+	}
+
+	// Create new client with tenant ID
+	if err := e.AddMimirClient(address, cacheKey, tenantID, ctx); err != nil {
+		return nil, fmt.Errorf("creating Mimir client for tenant %s: %w", tenantID, err)
+	}
+
+	return e.clients[cacheKey], nil
 }
 
 func (e *RulerClientCache) RemoveClient(name string) {

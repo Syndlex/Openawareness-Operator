@@ -36,7 +36,7 @@ import (
 
 const (
 	clientAnnoation = "openawareness.io/client-name"
-	mimirNamespace  = "openawareness.io/mimir-namespace"
+	mimirNamespace  = "openawareness.io/mimir-tenant"
 )
 
 // PrometheusRulesReconciler reconciles a PrometheusRules object

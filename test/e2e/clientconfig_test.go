@@ -110,6 +110,9 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clientConfigName,
 					Namespace: testNamespace,
+					Annotations: map[string]string{
+						"openawareness.io/mimir-tenant": "test-tenant",
+					},
 				},
 				Spec: openawarenessv1beta1.ClientConfigSpec{
 					Address: "http://mimir-gateway.mimir.svc.cluster.local:8080",
@@ -170,6 +173,9 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clientConfigName,
 					Namespace: testNamespace,
+					Annotations: map[string]string{
+						"openawareness.io/mimir-tenant": "test-tenant",
+					},
 				},
 				Spec: openawarenessv1beta1.ClientConfigSpec{
 					Address: "://invalid-url-format",
@@ -217,6 +223,9 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clientConfigName,
 					Namespace: testNamespace,
+					Annotations: map[string]string{
+						"openawareness.io/mimir-tenant": "test-tenant",
+					},
 				},
 				Spec: openawarenessv1beta1.ClientConfigSpec{
 					Address: "http://unreachable-host-12345.local:9009",
@@ -290,8 +299,12 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 				return createdClientConfig.Status.ConnectionStatus
 			}, timeout, interval).Should(Equal("Disconnected"))
 
-			By("Updating ClientConfig with valid URL")
+			By("Updating ClientConfig with valid URL and required annotation")
 			createdClientConfig.Spec.Address = "http://mimir-gateway.mimir.svc.cluster.local:8080"
+			if createdClientConfig.Annotations == nil {
+				createdClientConfig.Annotations = make(map[string]string)
+			}
+			createdClientConfig.Annotations["openawareness.io/mimir-tenant"] = "test-tenant"
 			Expect(k8sClient.Update(ctx, createdClientConfig)).To(Succeed())
 
 			By("Waiting for ConnectionStatus to transition to Connected")
@@ -328,6 +341,9 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clientConfigName,
 					Namespace: testNamespace,
+					Annotations: map[string]string{
+						"openawareness.io/mimir-tenant": "test-tenant",
+					},
 				},
 				Spec: openawarenessv1beta1.ClientConfigSpec{
 					Address: "http://mimir-gateway.mimir.svc.cluster.local:8080",

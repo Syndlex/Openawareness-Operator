@@ -15,7 +15,7 @@ metadata:
     openawareness.io/client-name: "e2e-mimir-client"
     # Mimir namespace/tenant for these rules
     # This ensures rules are isolated to the devops-team tenant
-    openawareness.io/mimir-namespace: "devops-team"
+    openawareness.io/mimir-tenant: "devops-team"
 spec:
   groups:
     # Pipeline health monitoring rules

@@ -18,6 +18,7 @@ package openawareness
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -80,7 +81,28 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		switch spec.Type {
 		case openawarenessv1beta1.Mimir:
-			err = r.RulerClients.AddMimirClient(spec.Address, clientConfig.Name, ctx)
+			// Extract tenant ID from annotation
+			tenantID := ""
+			if clientConfig.Annotations != nil {
+				tenantID = clientConfig.Annotations[utils.MimirTenantAnnotation]
+			}
+
+			// Check if tenant annotation is missing for Mimir client
+			if tenantID == "" {
+				logger.Info("Mimir ClientConfig is missing required tenant annotation",
+					"annotation", utils.MimirTenantAnnotation,
+					"name", clientConfig.Name)
+				
+				// Update status with specific reason for missing annotation
+				if statusErr := r.updateStatusMissingAnnotation(ctx, clientConfig); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status")
+					return ctrl.Result{}, statusErr
+				}
+				// Requeue to check again in case annotation is added
+				return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
+			}
+			
+			err = r.RulerClients.AddMimirClient(spec.Address, clientConfig.Name, tenantID, ctx)
 		case openawarenessv1beta1.Prometheus:
 			err = r.RulerClients.AddPromClient(spec.Address, clientConfig.Name, ctx)
 		}
@@ -136,6 +158,28 @@ func (r *ClientConfigReconciler) updateStatusConnected(ctx context.Context, clie
 		LastTransitionTime: now,
 		Reason:             openawarenessv1beta1.ReasonConnected,
 		Message:            "Successfully connected to endpoint",
+	}
+
+	utils.SetCondition(&clientConfig.Status.Conditions, condition)
+
+	return r.Status().Update(ctx, clientConfig)
+}
+
+// updateStatusMissingAnnotation updates the ClientConfig status to indicate missing required annotation
+func (r *ClientConfigReconciler) updateStatusMissingAnnotation(ctx context.Context, clientConfig *openawarenessv1beta1.ClientConfig) error {
+	now := metav1.Now()
+
+	clientConfig.Status.ConnectionStatus = openawarenessv1beta1.ConnectionStatusDisconnected
+	clientConfig.Status.ErrorMessage = fmt.Sprintf("Missing required annotation '%s' for Mimir client", utils.MimirTenantAnnotation)
+
+	// Update conditions
+	condition := metav1.Condition{
+		Type:               openawarenessv1beta1.ConditionTypeReady,
+		Status:             metav1.ConditionFalse,
+		ObservedGeneration: clientConfig.Generation,
+		LastTransitionTime: now,
+		Reason:             openawarenessv1beta1.ReasonMissingAnnotation,
+		Message:            fmt.Sprintf("Missing required annotation '%s' for Mimir client type", utils.MimirTenantAnnotation),
 	}
 
 	utils.SetCondition(&clientConfig.Status.Conditions, condition)

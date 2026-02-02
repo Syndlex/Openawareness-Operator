@@ -63,6 +63,44 @@ http://mimir-gateway.mimir.svc.cluster.local:8080
 
 This is the Mimir gateway service installed by the Helm chart in the `mimir` namespace.
 
+#### Multitenant Configuration
+
+Mimir is installed with **multitenancy enabled** to support the MimirAlertTenant controller. The installation configures:
+
+- `multitenancy_enabled: true` - Enables tenant isolation via `X-Scope-OrgID` header
+- Alertmanager component with API enabled
+- Lightweight configuration for e2e testing (no persistent volumes)
+
+#### Available API Endpoints
+
+With multitenancy enabled, the following endpoints are available:
+
+**Alertmanager APIs:**
+- `GET/POST/DELETE /api/v1/alerts` - Alertmanager configuration per tenant
+- `GET /multitenant_alertmanager/status` - Alertmanager status
+
+**Prometheus Rules APIs:**
+- `GET/POST/DELETE /prometheus/config/v1/rules/{namespace}` - Prometheus rules per namespace
+
+All requests must include the `X-Scope-OrgID` header to specify the tenant.
+
+#### Manual Testing
+
+To test the Mimir API manually:
+
+```bash
+# Port-forward to access Mimir locally
+make mimir-port-forward
+
+# In another terminal, test alertmanager config endpoint
+curl -H "X-Scope-OrgID: test-tenant" \
+  http://localhost:8080/api/v1/alerts
+
+# Test prometheus rules endpoint
+curl -H "X-Scope-OrgID: test-tenant" \
+  http://localhost:8080/prometheus/config/v1/rules/default
+```
+
 ### Test Namespace
 
 Tests run in the `mimiralerttenant-e2e-test` namespace, which is automatically created and cleaned up.

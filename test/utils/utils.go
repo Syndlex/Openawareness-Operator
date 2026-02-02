@@ -154,6 +154,7 @@ func InstallMimir() error {
 		cmd = exec.Command("helm", "install", mimirRelease, "grafana/mimir-distributed",
 			"--namespace", mimirNamespace,
 			"--set", "mimir.structuredConfig.limits.max_global_series_per_user=0",
+			"--set", "mimir.structuredConfig.multitenancy_enabled=true",
 			"--set", "nginx.enabled=false",
 			"--set", "gateway.service.type=ClusterIP",
 			"--set", "alertmanager.enabled=true",

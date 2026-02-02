@@ -13,7 +13,7 @@ metadata:
     openawareness.io/client-name: "e2e-mimir-client"
     # Mimir namespace/tenant for this alertmanager configuration
     # This enables multi-tenant isolation in Mimir
-    openawareness.io/mimir-namespace: "devops-team"
+    openawareness.io/mimir-tenant: "devops-team"
 spec:
   # Template files for notification templates
   # These templates define how alert notifications are formatted

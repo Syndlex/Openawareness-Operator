@@ -180,7 +180,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 ### 4.3 Annotations
 Project uses these annotation conventions:
 - `openawareness.io/client-name` - References ClientConfig for API access
-- `openawareness.io/mimir-namespace` - Specifies Mimir namespace for rules/alerts
+- `openawareness.io/mimir-tenant` - Specifies Mimir tenant for rules/alerts
 - Always validate annotation presence before use
 - Provide sensible defaults (e.g., "anonymous" namespace)
 
@@ -597,7 +597,7 @@ metadata:
   name: pipeline-alerts
   annotations:
     openawareness.io/client-name: "production-mimir"
-    openawareness.io/mimir-namespace: "devops-team"
+    openawareness.io/mimir-tenant: "devops-team"
 spec:
   groups:
   - name: pipeline
@@ -620,7 +620,7 @@ spec:
 - Document complex PromQL queries
 
 ### 11.3 Multi-Tenant Considerations
-- Use `openawareness.io/mimir-namespace` annotation for tenant isolation
+- Use `openawareness.io/mimir-tenant` annotation for tenant isolation
 - Ensure alerts are routed to correct teams
 - Don't share sensitive data across tenants
 - Test tenant isolation thoroughly

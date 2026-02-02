@@ -91,6 +91,8 @@ const (
 	ReasonServerError = "ServerError"
 	// ReasonConnected indicates successful connection
 	ReasonConnected = "Connected"
+	// ReasonMissingAnnotation indicates a required annotation is missing
+	ReasonMissingAnnotation = "MissingAnnotation"
 )
 
 // Connection status values

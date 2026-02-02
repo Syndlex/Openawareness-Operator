@@ -9,7 +9,7 @@ metadata:
     # Reference to the ClientConfig that provides Mimir connection details
     openawareness.io/client-name: "mimir-client"
     # Mimir namespace/tenant for this alertmanager configuration
-    openawareness.io/mimir-namespace: "devops-team"
+    openawareness.io/mimir-tenant: "devops-team"
 spec:
   # Optional: Template files for notification templates
   templateFiles:

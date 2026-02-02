@@ -2,6 +2,9 @@ apiVersion: openawareness.syndlex/v1beta1
 kind: ClientConfig
 metadata:
   name: e2e-mimir-client
+  annotations:
+    # Required for Mimir clients: specifies the tenant ID for multi-tenancy
+    openawareness.io/mimir-tenant: "devops-team"
   labels:
     app.kubernetes.io/name: openawareness-controller
     app.kubernetes.io/component: client-config

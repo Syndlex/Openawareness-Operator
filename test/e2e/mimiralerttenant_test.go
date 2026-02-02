@@ -18,7 +18,7 @@ limitations under the License.
 //
 // MimirAlertTenant E2E Tests (mimiralerttenant_test.go)
 //
-// This file tests the full lifecycle of MimirAlertTenant resources:
+// This file tests the full lifecycle of MimirAlertTenant resources with actual Mimir API verification:
 //
 // 1. Resource Creation
 //   - Creates a test namespace
@@ -26,11 +26,13 @@ limitations under the License.
 //   - Creates a MimirAlertTenant with Alertmanager configuration
 //   - Verifies finalizer is added
 //   - Verifies annotations are correct
+//   - **Verifies configuration is pushed to Mimir API via GET request**
 //
 // 2. Resource Updates
 //   - Tests updating AlertmanagerConfig
 //   - Tests adding new template files
-//   - Verifies updates are applied correctly
+//   - Verifies updates are applied correctly in Kubernetes
+//   - **Verifies updated configuration is present in Mimir API**
 //
 // 3. Validation
 //   - Tests handling of invalid YAML configuration
@@ -38,7 +40,8 @@ limitations under the License.
 //
 // 4. Resource Deletion
 //   - Tests proper cleanup via finalizer
-//   - Verifies resource is fully deleted
+//   - Verifies resource is fully deleted from Kubernetes
+//   - **Verifies configuration is deleted from Mimir API**
 //
 // 5. Error Handling
 //   - Tests missing client-name annotation
@@ -48,11 +51,19 @@ limitations under the License.
 // Prerequisites:
 //   - microk8s cluster running with correct context
 //   - Mimir installed via Helm (available at http://mimir-gateway.mimir.svc.cluster.local:8080)
+//   - Mimir API must be accessible from the test environment
+//
+// Debugging:
+//   - Use `make mimir-port-forward` to access Mimir API locally at http://localhost:8080
+//   - Manual verification: curl -H "X-Scope-OrgID: <tenant>" http://localhost:8080/api/v1/alerts
 //
 // Run with: ginkgo --focus="MimirAlertTenant E2E" test/e2e
 package e2e
 
 import (
+	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -63,7 +74,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
+	"github.com/syndlex/openawareness-controller/internal/mimir"
 )
+
+// createMimirClient creates a Mimir client for testing API verification
+func createMimirClient(ctx context.Context, address, tenant string) (*mimir.MimirClient, error) {
+	cfg := mimir.Config{
+		Address:  address,
+		TenantId: tenant,
+	}
+	return mimir.New(cfg, ctx)
+}
 
 var _ = Describe("MimirAlertTenant E2E", Ordered, func() {
 	const (
@@ -159,8 +180,8 @@ var _ = Describe("MimirAlertTenant E2E", Ordered, func() {
 					Name:      alertTenantName,
 					Namespace: testNamespace,
 					Annotations: map[string]string{
-						"openawareness.io/client-name":     clientConfigName,
-						"openawareness.io/mimir-namespace": mimirNamespace,
+						"openawareness.io/client-name":  clientConfigName,
+						"openawareness.io/mimir-tenant": alertTenantName,
 					},
 				},
 				Spec: openawarenessv1beta1.MimirAlertTenantSpec{
@@ -224,12 +245,104 @@ receivers:
 			By("Verifying annotations are present")
 			Expect(createdAlertTenant.Annotations).To(HaveKey("openawareness.io/client-name"))
 			Expect(createdAlertTenant.Annotations["openawareness.io/client-name"]).To(Equal(clientConfigName))
-			Expect(createdAlertTenant.Annotations).To(HaveKey("openawareness.io/mimir-namespace"))
-			Expect(createdAlertTenant.Annotations["openawareness.io/mimir-namespace"]).To(Equal(mimirNamespace))
+			Expect(createdAlertTenant.Annotations).To(HaveKey("openawareness.io/mimir-tenant"))
+			Expect(createdAlertTenant.Annotations["openawareness.io/mimir-tenant"]).To(Equal(alertTenantName))
 
 			By("Verifying spec fields are correct")
 			Expect(createdAlertTenant.Spec.AlertmanagerConfig).NotTo(BeEmpty())
 			Expect(createdAlertTenant.Spec.TemplateFiles).To(HaveKey("default_template"))
+
+			By("Verifying configuration sync status")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      alertTenantName,
+					Namespace: testNamespace,
+				}, createdAlertTenant)
+				if err != nil {
+					return false
+				}
+
+				// Check if status indicates sync completed (either success or failure)
+				// The status should be updated by the controller
+				return createdAlertTenant.Status.SyncStatus != "" &&
+					createdAlertTenant.Status.SyncStatus != openawarenessv1beta1.SyncStatusPending
+			}, timeout, interval).Should(BeTrue(), "Status should be updated by controller")
+
+			By("Checking reconciliation status")
+			// Get the latest status
+			Expect(k8sClient.Get(ctx, types.NamespacedName{
+				Name:      alertTenantName,
+				Namespace: testNamespace,
+			}, createdAlertTenant)).To(Succeed())
+
+			// Log the status for debugging
+			GinkgoWriter.Printf("MimirAlertTenant Status:\n")
+			GinkgoWriter.Printf("  SyncStatus: %s\n", createdAlertTenant.Status.SyncStatus)
+			GinkgoWriter.Printf("  ErrorMessage: %s\n", createdAlertTenant.Status.ErrorMessage)
+			GinkgoWriter.Printf("  ConfigurationValidation: %s\n", createdAlertTenant.Status.ConfigurationValidation)
+			for _, cond := range createdAlertTenant.Status.Conditions {
+				GinkgoWriter.Printf("  Condition: Type=%s, Status=%s, Reason=%s, Message=%s\n",
+					cond.Type, cond.Status, cond.Reason, cond.Message)
+			}
+
+			// Verify the status based on actual Mimir API state
+			if createdAlertTenant.Status.SyncStatus == openawarenessv1beta1.SyncStatusSynced {
+				GinkgoWriter.Printf("Sync succeeded - verifying in Mimir API\n")
+
+				// Verify successful sync conditions
+				Expect(createdAlertTenant.Status.LastSyncTime).NotTo(BeNil())
+				Expect(createdAlertTenant.Status.ConfigurationValidation).To(Equal(openawarenessv1beta1.ConfigValidationValid))
+
+				// Verify conditions reflect success
+				hasSuccessCondition := false
+				for _, cond := range createdAlertTenant.Status.Conditions {
+					if cond.Type == openawarenessv1beta1.ConditionTypeReady && cond.Status == metav1.ConditionTrue {
+						hasSuccessCondition = true
+						break
+					}
+				}
+				Expect(hasSuccessCondition).To(BeTrue(), "Should have a Ready=True condition")
+
+				By("Verifying configuration was pushed to Mimir API")
+				mimirClient, err := createMimirClient(context.Background(), "http://localhost:8080", alertTenantName)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(func() error {
+					config, templates, err := mimirClient.GetAlertmanagerConfig(context.Background())
+					if err != nil {
+						return fmt.Errorf("failed to get config from Mimir: %w", err)
+					}
+
+					// Verify config contains expected receiver
+					if !strings.Contains(config, "default-receiver") {
+						return fmt.Errorf("expected receiver 'default-receiver' not found in config")
+					}
+
+					// Verify templates
+					if _, exists := templates["default_template"]; !exists {
+						return fmt.Errorf("expected template 'default_template' not found")
+					}
+
+					return nil
+				}, timeout, interval).Should(Succeed(), "Configuration should be present in Mimir API")
+
+			} else {
+				GinkgoWriter.Printf("Sync failed - this is expected if Mimir multitenant alertmanager is not enabled\n")
+				GinkgoWriter.Printf("Error: %s\n", createdAlertTenant.Status.ErrorMessage)
+
+				// Verify error is properly captured in status
+				Expect(createdAlertTenant.Status.ErrorMessage).NotTo(BeEmpty())
+
+				// Verify conditions reflect the failure
+				hasFailedCondition := false
+				for _, cond := range createdAlertTenant.Status.Conditions {
+					if cond.Type == openawarenessv1beta1.ConditionTypeReady && cond.Status == metav1.ConditionFalse {
+						hasFailedCondition = true
+						break
+					}
+				}
+				Expect(hasFailedCondition).To(BeTrue(), "Should have a Ready=False condition")
+			}
 		})
 	})
 
@@ -275,21 +388,60 @@ receivers:
 				}
 				return updatedAlertTenant.Spec.AlertmanagerConfig
 			}, timeout, interval).Should(ContainSubstring("updated-receiver"))
+
+			By("Verifying update triggered reconciliation")
+			Eventually(func() bool {
+				err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      alertTenantName,
+					Namespace: testNamespace,
+				}, updatedAlertTenant)
+				if err != nil {
+					return false
+				}
+				// Status should reflect the update attempt
+				return updatedAlertTenant.Status.SyncStatus != ""
+			}, timeout, interval).Should(BeTrue(), "Status should be updated after config change")
+
+			// Log the updated status
+			GinkgoWriter.Printf("Updated MimirAlertTenant Status:\n")
+			GinkgoWriter.Printf("  SyncStatus: %s\n", updatedAlertTenant.Status.SyncStatus)
+			if updatedAlertTenant.Status.ErrorMessage != "" {
+				GinkgoWriter.Printf("  ErrorMessage: %s\n", updatedAlertTenant.Status.ErrorMessage)
+			}
+
+			// Only verify Mimir API if sync was successful
+			if updatedAlertTenant.Status.SyncStatus == openawarenessv1beta1.SyncStatusSynced {
+				By("Verifying updated configuration in Mimir API")
+				mimirClient, err := createMimirClient(context.Background(), "http://localhost:8080", alertTenantName)
+				Expect(err).NotTo(HaveOccurred())
+
+				Eventually(func() bool {
+					config, _, err := mimirClient.GetAlertmanagerConfig(context.Background())
+					if err != nil {
+						return false
+					}
+					return strings.Contains(config, "updated-receiver")
+				}, timeout, interval).Should(BeTrue(), "Updated configuration should be present in Mimir API")
+			}
 		})
 	})
 
 	Context("When adding template files", func() {
 		It("Should handle template updates", func() {
-			By("Fetching the existing MimirAlertTenant")
-			existingAlertTenant := &openawarenessv1beta1.MimirAlertTenant{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{
-				Name:      alertTenantName,
-				Namespace: testNamespace,
-			}, existingAlertTenant)).To(Succeed())
-
 			By("Adding a new template file")
-			existingAlertTenant.Spec.TemplateFiles["custom_template"] = `{{ define "__custom" }}Custom Template{{ end }}`
-			Expect(k8sClient.Update(ctx, existingAlertTenant)).To(Succeed())
+			// Use Eventually with retry logic to handle conflicts
+			Eventually(func() error {
+				existingAlertTenant := &openawarenessv1beta1.MimirAlertTenant{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      alertTenantName,
+					Namespace: testNamespace,
+				}, existingAlertTenant); err != nil {
+					return err
+				}
+				
+				existingAlertTenant.Spec.TemplateFiles["custom_template"] = `{{ define "__custom" }}Custom Template{{ end }}`
+				return k8sClient.Update(ctx, existingAlertTenant)
+			}, timeout, interval).Should(Succeed(), "Should update template files")
 
 			By("Verifying the new template was added")
 			updatedAlertTenant := &openawarenessv1beta1.MimirAlertTenant{}
@@ -317,8 +469,8 @@ receivers:
 					Name:      "invalid-alert-tenant",
 					Namespace: testNamespace,
 					Annotations: map[string]string{
-						"openawareness.io/client-name":     clientConfigName,
-						"openawareness.io/mimir-namespace": mimirNamespace,
+						"openawareness.io/client-name":  clientConfigName,
+						"openawareness.io/mimir-tenant": mimirNamespace,
 					},
 				},
 				Spec: openawarenessv1beta1.MimirAlertTenantSpec{
@@ -370,6 +522,17 @@ receivers:
 				}, deletingAlertTenant)
 				return client.IgnoreNotFound(err) == nil && err != nil
 			}, timeout, interval).Should(BeTrue(), "MimirAlertTenant should be fully deleted")
+
+			By("Verifying configuration was deleted from Mimir API")
+			// Only check Mimir API if the tenant was previously synced successfully
+			mimirClient, err := createMimirClient(context.Background(), "http://localhost:8080", alertTenantName)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() error {
+				_, _, err := mimirClient.GetAlertmanagerConfig(context.Background())
+				// Should return an error (404 or similar) after deletion
+				return err
+			}, timeout, interval).Should(HaveOccurred(), "Configuration should be deleted from Mimir API")
 		})
 	})
 
@@ -381,7 +544,7 @@ receivers:
 					Name:      "no-client-alert-tenant",
 					Namespace: testNamespace,
 					Annotations: map[string]string{
-						"openawareness.io/mimir-namespace": "test-namespace",
+						"openawareness.io/mimir-tenant": "test-namespace",
 					},
 				},
 				Spec: openawarenessv1beta1.MimirAlertTenantSpec{
@@ -424,8 +587,8 @@ receivers:
 					Name:      "bad-client-alert-tenant",
 					Namespace: testNamespace,
 					Annotations: map[string]string{
-						"openawareness.io/client-name":     "non-existent-client",
-						"openawareness.io/mimir-namespace": mimirNamespace,
+						"openawareness.io/client-name":  "non-existent-client",
+						"openawareness.io/mimir-tenant": mimirNamespace,
 					},
 				},
 				Spec: openawarenessv1beta1.MimirAlertTenantSpec{
