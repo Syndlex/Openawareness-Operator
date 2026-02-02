@@ -49,8 +49,8 @@ var _ = Describe("MimirAlertTenant Controller", func() {
 					Name:      resourceName,
 					Namespace: "default",
 					Annotations: map[string]string{
-						"openawareness.io/client-name":  "test-client",
-						"openawareness.io/mimir-tenant": "test-tenant",
+						utils.ClientNameAnnotation:  "test-client",
+						utils.MimirTenantAnnotation: "test-tenant",
 					},
 				},
 				Spec: openawarenessv1beta1.MimirAlertTenantSpec{

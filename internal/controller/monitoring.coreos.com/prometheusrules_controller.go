@@ -18,7 +18,7 @@ package monitoringcoreoscom
 
 import (
 	"context"
-	"errors"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -32,11 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-)
-
-const (
-	clientAnnoation = "openawareness.io/client-name"
-	mimirNamespace  = "openawareness.io/mimir-tenant"
 )
 
 // PrometheusRulesReconciler reconciles a PrometheusRules object
@@ -65,12 +60,11 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err := r.Get(ctx, req.NamespacedName, rule); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger.Info("Found Rule", "Name", rule.Name)
+	logger.Info("Found Rule", "name", rule.Name, "namespace", rule.Namespace)
 
 	alertManagerClient, err := r.clientFromAnnotation(logger, rule)
 	if err != nil {
-
-		logger.V(1).Info("No Alert manger Client found Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig", "Name", rule.Name)
+		logger.V(1).Info("No Alertmanager client found. Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig", "name", rule.Name, "namespace", rule.Namespace)
 		return ctrl.Result{}, nil
 	}
 
@@ -88,7 +82,7 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		for _, group := range groups {
 			err := alertManagerClient.CreateRuleGroup(ctx, namespace, group)
 			if err != nil {
-				logger.V(1).Error(err, "Error creating group", "Group", group)
+				logger.Error(err, "Failed to create rule group", "group", group.Name, "namespace", namespace, "rule", rule.Name)
 				return ctrl.Result{}, err
 			}
 		}
@@ -97,6 +91,7 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		for _, group := range rule.Spec.Groups {
 			err := alertManagerClient.DeleteRuleGroup(ctx, namespace, group.Name)
 			if err != nil {
+				logger.Error(err, "Failed to delete rule group", "group", group.Name, "namespace", namespace, "rule", rule.Name)
 				return ctrl.Result{}, err
 			}
 		}
@@ -107,12 +102,14 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			if err := r.Update(ctx, rule); err != nil {
 				return ctrl.Result{}, err
 			}
-			logger.Info("Rule "+rule.Name+" was deleted", "Name", rule.Name)
+			logger.Info("PrometheusRule was deleted", "name", rule.Name, "namespace", rule.Namespace)
 		}
 	}
 	return ctrl.Result{}, nil
 }
 
+// convert transforms PrometheusRule RuleGroups to Mimir's rulefmt.RuleGroup format.
+// It processes each rule group and converts individual rules to the appropriate format.
 func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
 	returnGroups := make([]rulefmt.RuleGroup, 0)
 	for _, group := range groups {
@@ -131,6 +128,8 @@ func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
 
 }
 
+// newRule converts a single PrometheusRule to a rulefmt.RuleNode.
+// It handles both alert rules (with Alert field) and recording rules (with Record field).
 func newRule(rule monitoringv1.Rule) rulefmt.RuleNode {
 	if rule.Alert != "" {
 		return rulefmt.RuleNode{
@@ -153,31 +152,36 @@ func newRule(rule monitoringv1.Rule) rulefmt.RuleNode {
 	}
 }
 
+// clientFromAnnotation retrieves the appropriate Mimir client for the given PrometheusRule.
+// It extracts the client name from the resource's annotations and returns the cached client.
+// Returns an error if the annotation is missing or if the client is not found in the cache.
 func (r *PrometheusRulesReconciler) clientFromAnnotation(logger logr.Logger, rule *monitoringv1.PrometheusRule) (clients.AwarenessClient, error) {
 	if rule.Annotations == nil {
-		logger.Info("rule is missing client annotation, '"+clientAnnoation+"'", "rulename", rule.Name)
-		return nil, errors.New("client annotation is empty")
+		logger.Info("PrometheusRule is missing client annotation", "annotation", utils.ClientNameAnnotation, "name", rule.Name, "namespace", rule.Namespace)
+		return nil, fmt.Errorf("annotation %s is missing for PrometheusRule %s/%s", utils.ClientNameAnnotation, rule.Namespace, rule.Name)
 	}
 
-	clientName := rule.Annotations[clientAnnoation]
+	clientName := rule.Annotations[utils.ClientNameAnnotation]
 	if clientName == "" {
-		logger.Info("rule is missing client annotation, '"+clientAnnoation+"'", "rulename", rule.Name)
-		return nil, errors.New("client annotation is empty")
+		logger.Info("PrometheusRule client annotation is empty", "annotation", utils.ClientNameAnnotation, "name", rule.Name, "namespace", rule.Namespace)
+		return nil, fmt.Errorf("annotation %s is empty for PrometheusRule %s/%s", utils.ClientNameAnnotation, rule.Namespace, rule.Name)
 	}
 
 	alertManagerClient, err := r.RulerClients.GetClient(clientName)
 	if err != nil {
-		logger.Info("Client does not exists rule name is:", "ulename", rule.Name)
-		return nil, err
+		logger.Info("Client does not exist in cache", "clientName", clientName, "name", rule.Name, "namespace", rule.Namespace)
+		return nil, fmt.Errorf("getting client %s for PrometheusRule %s/%s: %w", clientName, rule.Namespace, rule.Name, err)
 	}
 	return alertManagerClient, nil
 }
 
+// getNamespaceFromAnnotations extracts the Mimir tenant namespace from the PrometheusRule annotations.
+// Returns the tenant ID from the annotation, or the default tenant ID if the annotation is not set.
 func (r *PrometheusRulesReconciler) getNamespaceFromAnnotations(logger logr.Logger, rule *monitoringv1.PrometheusRule) string {
-	mimirNamespace := rule.Annotations[mimirNamespace]
+	mimirNamespace := rule.Annotations[utils.MimirTenantAnnotation]
 	if mimirNamespace == "" {
-		logger.Info("use anonymous as namespace because " + mimirNamespace + " is missing")
-		return "anonymous"
+		logger.V(1).Info("Using default tenant ID because annotation is missing", "annotation", utils.MimirTenantAnnotation, "defaultTenant", utils.DefaultTenantID, "name", rule.Name, "namespace", rule.Namespace)
+		return utils.DefaultTenantID
 	}
 	return mimirNamespace
 }

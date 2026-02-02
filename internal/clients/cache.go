@@ -10,7 +10,8 @@ import (
 	"github.com/syndlex/openawareness-controller/internal/mimir"
 )
 
-// RulerClientCacheInterface defines the interface for managing ruler clients
+// RulerClientCacheInterface defines the interface for managing ruler clients.
+// It provides methods to add, remove, and retrieve clients for both Mimir and Prometheus.
 type RulerClientCacheInterface interface {
 	AddMimirClient(address string, name string, tenantID string, ctx context.Context) error
 	AddPromClient(address string, name string, ctx context.Context) error
@@ -19,6 +20,8 @@ type RulerClientCacheInterface interface {
 	GetOrCreateMimirClient(address string, clientName string, tenantID string, ctx context.Context) (AwarenessClient, error)
 }
 
+// AwarenessClient defines the interface for interacting with rule and alert APIs.
+// It abstracts the operations for both Mimir and Prometheus clients.
 type AwarenessClient interface {
 	CreateRuleGroup(ctx context.Context, namespace string, rg rulefmt.RuleGroup) error
 	DeleteRuleGroup(ctx context.Context, namespace, groupName string) error
@@ -31,6 +34,8 @@ type AwarenessClient interface {
 	GetAlertmanagerStatus(ctx context.Context) (string, error)
 }
 
+// RulerClientCache implements RulerClientCacheInterface and manages a cache of ruler clients.
+// It stores clients in a map keyed by client name (or client-tenant combination for multi-tenancy).
 type RulerClientCache struct {
 	clients map[string]AwarenessClient
 }
@@ -38,12 +43,16 @@ type RulerClientCache struct {
 // Ensure RulerClientCache implements RulerClientCacheInterface
 var _ RulerClientCacheInterface = (*RulerClientCache)(nil)
 
+// NewRulerClientCache creates and returns a new RulerClientCache instance.
 func NewRulerClientCache() *RulerClientCache {
 	return &RulerClientCache{
 		clients: map[string]AwarenessClient{},
 	}
 }
 
+// AddMimirClient creates a new Mimir client and adds it to the cache.
+// It performs a health check to verify connectivity before caching the client.
+// Returns an error if client creation or health check fails.
 func (e *RulerClientCache) AddMimirClient(address string, name string, tenantID string, ctx context.Context) error {
 	client, err := mimir.New(mimir.Config{
 		User:            "",
@@ -71,6 +80,8 @@ func (e *RulerClientCache) AddMimirClient(address string, name string, tenantID 
 
 // GetOrCreateMimirClient gets an existing client or creates a new one for the given tenant.
 // The cache key is a combination of clientName and tenantID to support multi-tenancy.
+// This ensures each tenant has its own isolated client instance.
+// Returns the cached or newly created client, or an error if creation fails.
 func (e *RulerClientCache) GetOrCreateMimirClient(address string, clientName string, tenantID string, ctx context.Context) (AwarenessClient, error) {
 	// Create composite key: clientName + tenantID
 	cacheKey := fmt.Sprintf("%s-%s", clientName, tenantID)
@@ -88,6 +99,8 @@ func (e *RulerClientCache) GetOrCreateMimirClient(address string, clientName str
 	return e.clients[cacheKey], nil
 }
 
+// RemoveClient removes a client from the cache by name.
+// This is typically called when a ClientConfig is deleted.
 func (e *RulerClientCache) RemoveClient(name string) {
 	if e.clients[name] == nil {
 		return
@@ -95,6 +108,8 @@ func (e *RulerClientCache) RemoveClient(name string) {
 	delete(e.clients, name)
 }
 
+// GetClient retrieves a client from the cache by name.
+// Returns an error if the client is not found in the cache.
 func (e *RulerClientCache) GetClient(name string) (AwarenessClient, error) {
 	if client, exists := e.clients[name]; exists {
 		return client, nil
@@ -102,6 +117,8 @@ func (e *RulerClientCache) GetClient(name string) (AwarenessClient, error) {
 	return nil, errors.New("client not found")
 }
 
+// AddPromClient would create a Prometheus client and add it to the cache.
+// Currently not implemented - returns an error indicating this.
 func (e *RulerClientCache) AddPromClient(address string, name string, ctx context.Context) error {
 	return errors.New("Prometheus client not yet implemented")
 }

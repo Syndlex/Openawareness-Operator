@@ -4,14 +4,17 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/prometheus/prometheus/model/rulefmt"
 	"io"
 	"net/url"
+
+	"github.com/prometheus/prometheus/model/rulefmt"
 
 	"gopkg.in/yaml.v3"
 )
 
-// CreateRuleGroup creates a new rule group
+// CreateRuleGroup creates or updates a rule group in the specified namespace.
+// It marshals the rule group to YAML and sends it to the Mimir API.
+// Returns an error if marshaling fails or if the API request fails.
 func (r *MimirClient) CreateRuleGroup(ctx context.Context, namespace string, rg rulefmt.RuleGroup) error {
 	payload, err := yaml.Marshal(&rg)
 	if err != nil {
@@ -31,7 +34,8 @@ func (r *MimirClient) CreateRuleGroup(ctx context.Context, namespace string, rg 
 	return nil
 }
 
-// DeleteRuleGroup deletes a rule group
+// DeleteRuleGroup deletes a specific rule group from the given namespace.
+// Returns an error if the API request fails.
 func (r *MimirClient) DeleteRuleGroup(ctx context.Context, namespace, groupName string) error {
 	escapedNamespace := url.PathEscape(namespace)
 	escapedGroupName := url.PathEscape(groupName)
@@ -47,7 +51,8 @@ func (r *MimirClient) DeleteRuleGroup(ctx context.Context, namespace, groupName 
 	return nil
 }
 
-// GetRuleGroup retrieves a rule group
+// GetRuleGroup retrieves a specific rule group from the given namespace.
+// Returns the rule group or an error if the API request or unmarshaling fails.
 func (r *MimirClient) GetRuleGroup(ctx context.Context, namespace, groupName string) (*rulefmt.RuleGroup, error) {
 	escapedNamespace := url.PathEscape(namespace)
 	escapedGroupName := url.PathEscape(groupName)
@@ -79,7 +84,9 @@ func (r *MimirClient) GetRuleGroup(ctx context.Context, namespace, groupName str
 	return &rg, nil
 }
 
-// ListRules retrieves a rule group
+// ListRules retrieves all rule groups, optionally filtered by namespace.
+// If namespace is empty, retrieves all rule groups for the tenant.
+// Returns a map of namespace to rule groups, or an error if the request fails.
 func (r *MimirClient) ListRules(ctx context.Context, namespace string) (map[string][]rulefmt.RuleGroup, error) {
 	path := r.apiPath
 	if namespace != "" {
@@ -107,7 +114,8 @@ func (r *MimirClient) ListRules(ctx context.Context, namespace string) (map[stri
 	return ruleSet, nil
 }
 
-// DeleteNamespace delete all the rule groups in a namespace including the namespace itself
+// DeleteNamespace deletes all rule groups in a namespace including the namespace itself.
+// Returns an error if the API request fails.
 func (r *MimirClient) DeleteNamespace(ctx context.Context, namespace string) error {
 	escapedNamespace := url.PathEscape(namespace)
 	path := r.apiPath + "/" + escapedNamespace

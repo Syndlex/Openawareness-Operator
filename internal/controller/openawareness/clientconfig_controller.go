@@ -61,13 +61,13 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, k8sClient.IgnoreNotFound(err)
 	}
 
-	logger.Info("Found new Client Config", "Name", clientConfig.Name)
+	logger.Info("Found new Client Config", "name", clientConfig.Name, "namespace", clientConfig.Namespace)
 
 	// examine DeletionTimestamp to determine if object is under deletion
 	if clientConfig.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Register finalizer
 		if !controllerutil.ContainsFinalizer(clientConfig, utils.MyFinalizerName) {
-			logger.Info("Add Finalizer to ClientConfig")
+			logger.Info("Add Finalizer to ClientConfig", "name", clientConfig.Name, "namespace", clientConfig.Namespace)
 			controllerutil.AddFinalizer(clientConfig, utils.MyFinalizerName)
 			if err := r.Update(ctx, clientConfig); err != nil {
 				logger.Error(err, "Problem adding Finalizer to client config")
@@ -92,7 +92,7 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				logger.Info("Mimir ClientConfig is missing required tenant annotation",
 					"annotation", utils.MimirTenantAnnotation,
 					"name", clientConfig.Name)
-				
+
 				// Update status with specific reason for missing annotation
 				if statusErr := r.updateStatusMissingAnnotation(ctx, clientConfig); statusErr != nil {
 					logger.Error(statusErr, "Failed to update status")
@@ -101,7 +101,7 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				// Requeue to check again in case annotation is added
 				return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
 			}
-			
+
 			err = r.RulerClients.AddMimirClient(spec.Address, clientConfig.Name, tenantID, ctx)
 		case openawarenessv1beta1.Prometheus:
 			err = r.RulerClients.AddPromClient(spec.Address, clientConfig.Name, ctx)
@@ -109,7 +109,7 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		// Update status based on connection result
 		if err != nil {
-			logger.Error(err, "Failed to add client", "Name", clientConfig.Name, "Type", spec.Type)
+			logger.Error(err, "Failed to add client", "name", clientConfig.Name, "namespace", clientConfig.Namespace, "type", spec.Type)
 			if statusErr := r.updateStatusDisconnected(ctx, clientConfig, err); statusErr != nil {
 				logger.Error(statusErr, "Failed to update status")
 				return ctrl.Result{}, statusErr
@@ -118,7 +118,7 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
 		}
 
-		logger.Info("Added new Client Config", "Name", clientConfig.Name)
+		logger.Info("Added new Client Config", "name", clientConfig.Name, "namespace", clientConfig.Namespace, "type", spec.Type)
 
 		// Update status to connected
 		if statusErr := r.updateStatusConnected(ctx, clientConfig); statusErr != nil {
@@ -128,21 +128,23 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	} else {
 		// The object is being deleted check for finalizer
 		if controllerutil.ContainsFinalizer(clientConfig, utils.MyFinalizerName) {
-			logger.Info("Removing finalizer from ClientConfig")
+			logger.Info("Removing finalizer from ClientConfig", "name", clientConfig.Name, "namespace", clientConfig.Namespace)
 			// remove our finalizer from the list and update it.
 			controllerutil.RemoveFinalizer(clientConfig, utils.MyFinalizerName)
 			if err := r.Update(ctx, clientConfig); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
-		logger.Info("Removing client from cache")
+		logger.Info("Removing client from cache", "name", clientConfig.Name, "namespace", clientConfig.Namespace)
 		r.RulerClients.RemoveClient(clientConfig.Name)
 	}
 
 	return ctrl.Result{}, nil
 }
 
-// updateStatusConnected updates the ClientConfig status to indicate successful connection
+// updateStatusConnected updates the ClientConfig status to indicate successful connection.
+// It sets the ConnectionStatus to Connected, records the connection time, clears any error message,
+// and updates the Ready condition to True. Returns an error if the status update fails.
 func (r *ClientConfigReconciler) updateStatusConnected(ctx context.Context, clientConfig *openawarenessv1beta1.ClientConfig) error {
 	now := metav1.Now()
 
@@ -165,7 +167,10 @@ func (r *ClientConfigReconciler) updateStatusConnected(ctx context.Context, clie
 	return r.Status().Update(ctx, clientConfig)
 }
 
-// updateStatusMissingAnnotation updates the ClientConfig status to indicate missing required annotation
+// updateStatusMissingAnnotation updates the ClientConfig status to indicate missing required annotation.
+// It sets the ConnectionStatus to Disconnected, records an error message about the missing annotation,
+// and updates the Ready condition to False with the MissingAnnotation reason.
+// Returns an error if the status update fails.
 func (r *ClientConfigReconciler) updateStatusMissingAnnotation(ctx context.Context, clientConfig *openawarenessv1beta1.ClientConfig) error {
 	now := metav1.Now()
 
@@ -187,7 +192,10 @@ func (r *ClientConfigReconciler) updateStatusMissingAnnotation(ctx context.Conte
 	return r.Status().Update(ctx, clientConfig)
 }
 
-// updateStatusDisconnected updates the ClientConfig status to indicate connection failure
+// updateStatusDisconnected updates the ClientConfig status to indicate connection failure.
+// It sets the ConnectionStatus to Disconnected, records the error message, and updates the Ready
+// condition to False with an appropriate reason based on the error type (e.g., NetworkError, AuthenticationError).
+// Returns an error if the status update fails.
 func (r *ClientConfigReconciler) updateStatusDisconnected(ctx context.Context, clientConfig *openawarenessv1beta1.ClientConfig, err error) error {
 	now := metav1.Now()
 

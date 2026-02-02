@@ -219,21 +219,173 @@ The e2e tests can be integrated into CI/CD pipelines. Ensure:
 
 Current e2e test coverage:
 
-### MimirAlertTenant Tests
-- ✅ MimirAlertTenant creation and reconciliation
-- ✅ MimirAlertTenant updates (config and templates)
-- ✅ MimirAlertTenant deletion and cleanup
-- ✅ Error handling (missing annotations, invalid configs)
-- ✅ ClientConfig integration
-- ✅ Finalizer lifecycle
+### MimirAlertTenant E2E Tests (`mimiralerttenant_test.go`)
 
-### ClientConfig Tests
-- ✅ ClientConfig creation with valid Mimir endpoint
-- ✅ Status updates (ConnectionStatus, Conditions, LastConnectionTime)
-- ✅ Invalid URL error handling (InvalidURL reason)
-- ✅ Unreachable host error handling (NetworkError, DNSResolutionError)
-- ✅ Connection recovery (Disconnected → Connected transition)
-- ✅ Finalizer lifecycle and cleanup
+Tests the full lifecycle of MimirAlertTenant resources with actual Mimir API verification:
+
+#### 1. Resource Creation
+- Creates a test namespace
+- Creates a ClientConfig pointing to Mimir
+- Creates a MimirAlertTenant with Alertmanager configuration
+- Verifies finalizer is added
+- Verifies annotations are correct
+- **Verifies configuration is pushed to Mimir API via GET request**
+
+#### 2. Resource Updates
+- Tests updating AlertmanagerConfig
+- Tests adding new template files
+- Verifies updates are applied correctly in Kubernetes
+- **Verifies updated configuration is present in Mimir API**
+
+#### 3. Validation
+- Tests handling of invalid YAML configuration
+- Verifies controller doesn't crash on validation errors
+
+#### 4. Resource Deletion
+- Tests proper cleanup via finalizer
+- Verifies resource is fully deleted from Kubernetes
+- **Verifies configuration is deleted from Mimir API**
+
+#### 5. Error Handling
+- Tests missing client-name annotation
+- Tests non-existent ClientConfig reference
+- Verifies graceful error handling
+
+### ClientConfig E2E Tests (`clientconfig_test.go`)
+
+Tests the full lifecycle of ClientConfig resources with focus on status updates:
+
+#### 1. Successful Connection
+- Creates a ClientConfig pointing to a valid Mimir instance
+- Verifies ConnectionStatus is "Connected"
+- Verifies Ready condition is True
+- Verifies LastConnectionTime is set
+
+#### 2. Failed Connection - Invalid URL
+- Creates a ClientConfig with malformed URL
+- Verifies ConnectionStatus is "Disconnected"
+- Verifies Ready condition is False with reason "InvalidURL"
+- Verifies ErrorMessage contains details
+
+#### 3. Failed Connection - Unreachable Host
+- Creates a ClientConfig with unreachable endpoint
+- Verifies ConnectionStatus is "Disconnected"
+- Verifies Ready condition is False with network error reason
+- Verifies ErrorMessage contains connection details
+
+#### 4. Connection Recovery
+- Updates a failed ClientConfig with valid URL
+- Verifies status transitions from Disconnected to Connected
+- Verifies conditions are updated appropriately
+
+## Test Helper Functions
+
+The `test/helper/` directory contains reusable helper functions to reduce code duplication:
+
+### MimirAlertTenant Helpers (`mimiralerttenant_helpers.go`)
+
+#### Resource Creation & Lifecycle
+- `CreateMimirAlertTenant()` - Creates a MimirAlertTenant with specified config
+- `WaitForMimirAlertTenantCreation()` - Waits for resource to be created
+- `WaitForFinalizerAdded()` - Waits for finalizer to be added
+- `WaitForSyncStatusUpdate()` - Waits for SyncStatus to be updated
+- `WaitForResourceDeleted()` - Waits for resource to be fully deleted
+
+#### Resource Updates
+- `UpdateMimirAlertTenantConfig()` - Updates AlertmanagerConfig with retry logic
+- `AddTemplateFile()` - Adds a template file with retry logic
+
+#### Verification
+- `VerifyMimirAlertTenantAnnotations()` - Verifies required annotations
+- `VerifySuccessfulSync()` - Verifies successful sync status and conditions
+- `VerifyFailedSync()` - Verifies failed sync status and conditions
+
+#### Mimir API Verification
+- `CreateMimirClient()` - Creates a Mimir client for API testing
+- `VerifyMimirAPIConfig()` - Verifies config was pushed to Mimir
+- `VerifyMimirAPITemplate()` - Verifies template was pushed to Mimir
+- `VerifyMimirAPIConfigDeleted()` - Verifies config was deleted from Mimir
+
+### ClientConfig Helpers (`clientconfig_helpers.go`)
+
+#### Resource Creation & Lifecycle
+- `CreateClientConfig()` - Creates a ClientConfig resource
+- `WaitForClientConfigCreation()` - Waits for resource to be created
+- `WaitForClientConfigFinalizerAdded()` - Waits for finalizer to be added
+- `WaitForClientConfigDeleted()` - Waits for resource to be fully deleted
+
+#### Status Verification
+- `WaitForConnectionStatus()` - Waits for specific ConnectionStatus
+- `WaitForConditionsSet()` - Waits for conditions to be set
+- `FindCondition()` - Finds a condition by type in status
+
+#### Resource Updates
+- `UpdateClientConfigAddress()` - Updates address with retry logic
+- `AddClientConfigAnnotation()` - Adds annotation with retry logic
+
+#### Verification
+- `VerifyConnectedStatus()` - Verifies Connected status with proper conditions
+- `VerifyDisconnectedStatus()` - Verifies Disconnected status with error details
+
+### Generic Kubernetes Helpers (`generic_helpers.go`)
+
+#### Namespace Management
+- `CreateNamespace()` - Creates a namespace with cleanup handling
+- `DeleteNamespace()` - Deletes a namespace and waits for removal
+
+#### Generic Operations
+- `WaitForDeletionTimestamp()` - Waits for DeletionTimestamp to be set
+
+## Debugging Tips
+
+### Port-Forward to Mimir
+
+Access Mimir API locally for manual testing:
+```bash
+make mimir-port-forward
+
+# In another terminal
+curl -H "X-Scope-OrgID: test-tenant" http://localhost:8080/api/v1/alerts
+```
+
+### Check Controller Logs
+
+View controller logs during test execution:
+```bash
+kubectl logs -n openawareness-controller-system \
+  -l control-plane=controller-manager -f
+```
+
+### Inspect Resource Status
+
+Check resource status after test execution:
+```bash
+# MimirAlertTenant status
+kubectl get mimiralerttenant -n <namespace> -o yaml
+
+# ClientConfig status  
+kubectl get clientconfig -n <namespace> -o yaml
+
+# Check conditions
+kubectl get clientconfig <name> -n <namespace> -o jsonpath='{.status.conditions}'
+```
+
+### Common Test Failures
+
+#### "Mimir API not accessible"
+- Verify Mimir is running: `kubectl get pods -n mimir`
+- Check service endpoints: `kubectl get endpoints -n mimir`
+- Port-forward and test manually
+
+#### "Resource stuck in deletion"
+- Check finalizers: `kubectl get <resource> -o yaml | grep finalizers`
+- Check controller logs for errors
+- Manually remove finalizer if needed (test cleanup only)
+
+#### "Timeout waiting for status update"
+- Increase timeout values in test constants
+- Check controller is reconciling: look for logs
+- Verify RBAC permissions are correct
 
 ## Additional Resources
 
@@ -241,3 +393,4 @@ Current e2e test coverage:
 - [Gomega Matchers](https://onsi.github.io/gomega/)
 - [Controller Runtime Testing](https://book.kubebuilder.io/reference/testing)
 - [Grafana Mimir Documentation](https://grafana.com/docs/mimir/)
+- [Kubernetes E2E Testing Best Practices](https://kubernetes.io/docs/reference/using-api/api-concepts/)

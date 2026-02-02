@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/syndlex/openawareness-controller/internal/controller/utils"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -110,6 +111,9 @@ var _ = Describe("ClientConfig Controller", func() {
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      ClientConfigName,
 						Namespace: ClientConfigNamespace,
+						Annotations: map[string]string{
+							utils.MimirTenantAnnotation: "test-tenant",
+						},
 					},
 					Spec: openawarenessv1beta1.ClientConfigSpec{
 						Address: "://invalid-url",

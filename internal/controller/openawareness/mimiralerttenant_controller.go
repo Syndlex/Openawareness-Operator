@@ -18,7 +18,6 @@ package openawareness
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -44,12 +43,18 @@ type MimirAlertTenantReconciler struct {
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the MimirAlertTenant object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
+// Reconcile reconciles the MimirAlertTenant resource by syncing Alertmanager configurations
+// to the configured Mimir instance. It handles the full lifecycle including creation,
+// updates, and deletion of Alertmanager configurations with proper finalizer management.
+//
+// The reconciliation process:
+// 1. Fetches the MimirAlertTenant resource
+// 2. Adds finalizer for cleanup on deletion
+// 3. Retrieves the Mimir client from annotations
+// 4. Validates the Alertmanager configuration
+// 5. Pushes configuration to Mimir API
+// 6. Updates status to reflect sync state
+// 7. On deletion, removes configuration from Mimir and cleans up finalizer
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
@@ -60,7 +65,7 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if err := r.Get(ctx, req.NamespacedName, rule); err != nil {
 		return ctrl.Result{}, k8sClient.IgnoreNotFound(err)
 	}
-	logger.Info("Found MimirAlertTenant", "Name", rule.Name, "Namespace", rule.Namespace)
+	logger.Info("Found MimirAlertTenant", "name", rule.Name, "namespace", rule.Namespace)
 
 	if rule.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Register finalizer first, before checking for client
@@ -165,27 +170,31 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 }
 
+// clientFromCrd retrieves the appropriate Mimir client for the given MimirAlertTenant.
+// It extracts the client name and tenant ID from the resource's annotations,
+// fetches the ClientConfig, and returns a tenant-specific Mimir client.
+// Returns an error if annotations are missing or if the client cannot be created.
 func (r *MimirAlertTenantReconciler) clientFromCrd(logger logr.Logger, rule *openawarenessv1beta1.MimirAlertTenant) (clients.AwarenessClient, error) {
 	if r.RulerClients == nil {
 		logger.Info("RulerClients cache is not initialized")
-		return nil, errors.New("ruler clients cache is nil")
+		return nil, fmt.Errorf("ruler clients cache is nil for MimirAlertTenant %s/%s", rule.Namespace, rule.Name)
 	}
 
 	if rule.Annotations == nil {
 		logger.Info("MimirAlertTenant is missing required annotations", "name", rule.Name)
-		return nil, errors.New("annotations are missing")
+		return nil, fmt.Errorf("annotations are missing for MimirAlertTenant %s/%s", rule.Namespace, rule.Name)
 	}
 
 	clientName := rule.Annotations[utils.ClientNameAnnotation]
 	if clientName == "" {
 		logger.Info("MimirAlertTenant is missing '"+utils.ClientNameAnnotation+"' annotation", "name", rule.Name)
-		return nil, errors.New("client-name annotation is empty")
+		return nil, fmt.Errorf("annotation %s is empty for MimirAlertTenant %s/%s", utils.ClientNameAnnotation, rule.Namespace, rule.Name)
 	}
 
 	tenantID := rule.Annotations[utils.MimirTenantAnnotation]
 	if tenantID == "" {
 		logger.Info("MimirAlertTenant is missing '"+utils.MimirTenantAnnotation+"' annotation", "name", rule.Name)
-		return nil, errors.New("mimir-tenant annotation is empty")
+		return nil, fmt.Errorf("annotation %s is empty for MimirAlertTenant %s/%s", utils.MimirTenantAnnotation, rule.Namespace, rule.Name)
 	}
 
 	// Get the ClientConfig to retrieve the Mimir address

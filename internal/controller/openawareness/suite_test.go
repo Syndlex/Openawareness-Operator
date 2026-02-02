@@ -25,7 +25,10 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
+	"github.com/syndlex/openawareness-controller/internal/clients"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -33,9 +36,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
-	"github.com/syndlex/openawareness-controller/internal/clients"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -92,6 +92,9 @@ var _ = BeforeSuite(func() {
 	By("creating controller manager")
 	k8sManager, err = ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: ":0", // Use random port to avoid conflicts
+		},
 	})
 	Expect(err).NotTo(HaveOccurred())
 
