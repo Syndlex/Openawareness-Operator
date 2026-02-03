@@ -5,7 +5,7 @@ This directory contains end-to-end tests for the openawareness-controller, inclu
 ## Prerequisites
 
 ### Required Tools
-- Go 1.23.0 or later
+- Go 1.24.0 or later
 - kubectl
 - Helm 3.x
 - microk8s (or another Kubernetes cluster)
@@ -17,8 +17,9 @@ The e2e tests expect a microk8s cluster to be running. When you run `make test-e
 2. Install Mimir via Helm (if not already installed)
 3. Create a service alias for test access
 4. Deploy the controller
-5. Run test scenarios
-6. Clean up resources
+5. Create a port forward `kubectl port-forward -n mimir svc/mimir-gateway 8080:80`
+6. Run test scenarios
+7. Clean up resources
 
 **Important**: The tests check that the current Kubernetes context is set to `microk8s` to prevent accidentally running against the wrong cluster.
 
@@ -219,6 +220,46 @@ The e2e tests can be integrated into CI/CD pipelines. Ensure:
 
 Current e2e test coverage:
 
+### PrometheusRule E2E Tests (`prometheusrule_test.go`)
+
+Tests the full lifecycle of PrometheusRule resources (from prometheus-operator) with Mimir integration:
+
+#### 1. Valid Configuration
+- Creates a PrometheusRule with both alert rules and recording rules
+- Verifies finalizer is added
+- **Verifies rule groups are pushed to Mimir API**
+- **Verifies rule group content (number of rules)**
+- Tests deletion and cleanup from Mimir
+
+#### 2. Missing Annotations
+- Tests PrometheusRule without client-name annotation
+- Verifies graceful handling without crashes
+- Tests PrometheusRule without mimir-tenant annotation
+- Verifies default tenant is used
+
+#### 3. Invalid References
+- Tests PrometheusRule with non-existent ClientConfig
+- Verifies resource is created but sync is skipped
+- Verifies proper error handling
+
+#### 4. Rule Updates
+- Creates initial PrometheusRule with one alert
+- Updates rule groups to add additional rules
+- **Verifies updated rules are synced to Mimir**
+- Verifies rule group content is updated
+
+#### 5. Multiple Rules
+- Creates multiple PrometheusRule resources using same ClientConfig
+- Verifies both are synced independently
+- Tests deletion of one while other remains
+- Verifies proper cleanup
+
+#### 6. Complex Rules
+- Tests PrometheusRule with multiple alert types (critical, warning)
+- Tests recording rules with proper naming conventions
+- Verifies complex labels and annotations
+- **Verifies all rule types are correctly synced to Mimir**
+
 ### MimirAlertTenant E2E Tests (`mimiralerttenant_test.go`)
 
 Tests the full lifecycle of MimirAlertTenant resources with actual Mimir API verification:
@@ -326,6 +367,27 @@ The `test/helper/` directory contains reusable helper functions to reduce code d
 #### Verification
 - `VerifyConnectedStatus()` - Verifies Connected status with proper conditions
 - `VerifyDisconnectedStatus()` - Verifies Disconnected status with error details
+
+### PrometheusRule Helpers (`prometheusrule_helpers.go`)
+
+#### Resource Creation & Lifecycle
+- `CreatePrometheusRule()` - Creates a PrometheusRule with specified configuration
+- `CreateSimplePrometheusRule()` - Creates a PrometheusRule with single alert for testing
+- `WaitForPrometheusRuleCreation()` - Waits for resource to be created
+- `WaitForPrometheusRuleFinalizerAdded()` - Waits for finalizer to be added
+- `WaitForPrometheusRuleDeleted()` - Waits for resource to be fully deleted
+
+#### Resource Updates
+- `UpdatePrometheusRuleGroups()` - Updates rule groups with retry logic
+- `AddPrometheusRuleAnnotation()` - Adds annotation with retry logic
+
+#### Mimir API Verification
+- `VerifyMimirRuleGroup()` - Verifies rule group exists in Mimir API
+- `VerifyMimirRuleGroupDeleted()` - Verifies rule group was deleted from Mimir
+- `VerifyMimirRuleGroupContent()` - Verifies rule group has expected number of rules
+
+#### Resource Retrieval
+- `GetPrometheusRule()` - Retrieves a PrometheusRule resource
 
 ### Generic Kubernetes Helpers (`generic_helpers.go`)
 
