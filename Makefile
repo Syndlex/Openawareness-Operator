@@ -4,8 +4,17 @@ IMG ?= controller:latest
 MICROK8S_REGISTRY ?= localhost:32000
 MICROK8S_IMG ?= $(MICROK8S_REGISTRY)/openawareness-controller:latest
 
-# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.31.0
+#ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
+ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
+#ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
+ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
+
+## Tool Versions
+KUSTOMIZE_VERSION ?= v5.8.0
+CONTROLLER_TOOLS_VERSION ?= v0.20.0
+GOLANGCI_LINT_VERSION ?= v2.8.0
+HELMIFY_VERSION ?= v0.4.19
+
 
 KUBECONFIG = /home/mfeix@corp.exxcellent.de/.kube/clusters/microk8s.yaml
 
@@ -213,12 +222,6 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 HELMIFY ?= $(LOCALBIN)/helmify
 
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.8.0
-CONTROLLER_TOOLS_VERSION ?= v0.20.0
-ENVTEST_VERSION ?= release-0.23.1
-GOLANGCI_LINT_VERSION ?= v2.8.0
-HELMIFY_VERSION ?= v0.4.19
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
