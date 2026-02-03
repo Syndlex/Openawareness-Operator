@@ -40,14 +40,6 @@ jobs:
       - name: Run unit tests
         run: make test
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./cover.out
-          flags: unittests
-          name: codecov-umbrella
-          fail_ci_if_error: false
-
   helm-validation:
     name: Validate Helm Chart
     runs-on: ubuntu-latest
