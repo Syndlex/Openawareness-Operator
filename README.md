@@ -107,17 +107,11 @@ spec:
 
 #### Option 1: Helm (Recommended)
 
-##### Add the Helm repository
+##### Install from OCI Registry
 
 ```sh
-helm repo add openawareness https://syndlex.github.io/openawareness-operator
-helm repo update
-```
-
-##### Install the chart
-
-```sh
-helm install openawareness openawareness/openawareness-controller \
+helm install openawareness oci://ghcr.io/syndlex/charts/openawareness-controller \
+  --version 0.1.0 \
   --namespace openawareness-system \
   --create-namespace
 ```
@@ -144,18 +138,19 @@ metrics:
 EOF
 
 # Install with custom values
-helm install openawareness openawareness/openawareness-controller \
+helm install openawareness oci://ghcr.io/syndlex/charts/openawareness-controller \
+  --version 0.1.0 \
   --namespace openawareness-system \
   --create-namespace \
   --values my-values.yaml
 ```
 
-##### Alternative: Install from OCI Registry
+##### Upgrade to a new version
 
 ```sh
-helm install openawareness oci://ghcr.io/syndlex/charts/openawareness-controller \
-  --namespace openawareness-system \
-  --create-namespace
+helm upgrade openawareness oci://ghcr.io/syndlex/charts/openawareness-controller \
+  --version <new-version> \
+  --namespace openawareness-system
 ```
 
 #### Option 2: Kubectl (Direct Installation)

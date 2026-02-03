@@ -147,18 +147,13 @@ jobs:
           
           ### Helm Chart Installation
           
-          #### Option 1: GitHub Pages Repository
+          Install from OCI Registry:
           
           \`\`\`bash
-          helm repo add openawareness https://syndlex.github.io/openawareness-operator
-          helm repo update
-          helm install openawareness openawareness/openawareness-controller --version ${VERSION}
-          \`\`\`
-          
-          #### Option 2: OCI Registry
-          
-          \`\`\`bash
-          helm install openawareness oci://ghcr.io/syndlex/charts/openawareness-controller --version ${VERSION}
+          helm install openawareness oci://ghcr.io/syndlex/charts/openawareness-controller \
+            --version ${VERSION} \
+            --namespace openawareness-system \
+            --create-namespace
           \`\`\`
           
           ### Kubectl Installation
