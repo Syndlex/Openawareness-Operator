@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "openawareness-controller.fullname" . }}-openawareness-mimiralerttenant-editor-role
+  labels:
+  {{- include "openawareness-controller.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimiralerttenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - openawareness.syndlex
+  resources:
+  - mimiralerttenants/status
+  verbs:
+  - get

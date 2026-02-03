@@ -211,12 +211,14 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
+HELMIFY ?= $(LOCALBIN)/helmify
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.4.3
 CONTROLLER_TOOLS_VERSION ?= v0.16.1
 ENVTEST_VERSION ?= release-0.19
 GOLANGCI_LINT_VERSION ?= v1.59.1
+HELMIFY_VERSION ?= v0.4.19
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -237,6 +239,45 @@ $(ENVTEST): $(LOCALBIN)
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
 	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+
+.PHONY: helmify
+helmify: $(HELMIFY) ## Download helmify locally if necessary.
+$(HELMIFY): $(LOCALBIN)
+	$(call go-install-tool,$(HELMIFY),github.com/arttor/helmify/cmd/helmify,$(HELMIFY_VERSION))
+
+##@ Helm
+
+.PHONY: helm
+helm: manifests kustomize helmify ## Generate Helm chart from kustomize manifests
+	@echo "Generating Helm chart..."
+	$(KUSTOMIZE) build config/default | $(HELMIFY) -crd-dir chart/openawareness-controller
+	@echo "Removing hardcoded image tag from values.yaml..."
+	sed -i '/^\s*tag: /d' chart/openawareness-controller/values.yaml
+	@echo "Helm chart generated successfully in chart/openawareness-controller/"
+
+.PHONY: helm-lint
+helm-lint: helm ## Lint Helm chart
+	@echo "Linting Helm chart..."
+	helm lint chart/openawareness-controller
+
+.PHONY: helm-package
+helm-package: helm ## Package Helm chart
+	@echo "Packaging Helm chart..."
+	mkdir -p dist
+	helm package chart/openawareness-controller -d dist/
+	@echo "Helm chart packaged in dist/"
+
+.PHONY: helm-install
+helm-install: helm ## Install Helm chart locally
+	@echo "Installing Helm chart..."
+	helm upgrade --install openawareness-controller chart/openawareness-controller \
+		--namespace openawareness-system \
+		--create-namespace
+
+.PHONY: helm-uninstall
+helm-uninstall: ## Uninstall Helm chart
+	@echo "Uninstalling Helm chart..."
+	helm uninstall openawareness-controller --namespace openawareness-system || true
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary

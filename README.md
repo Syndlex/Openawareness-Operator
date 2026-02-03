@@ -105,12 +105,67 @@ spec:
 
 ### Installation
 
-#### 1. Install CRDs
+#### Option 1: Helm (Recommended)
+
+##### Add the Helm repository
+
+```sh
+helm repo add openawareness https://syndlex.github.io/openawareness-operator
+helm repo update
+```
+
+##### Install the chart
+
+```sh
+helm install openawareness openawareness/openawareness-controller \
+  --namespace openawareness-system \
+  --create-namespace
+```
+
+##### Install with custom values
+
+```sh
+# Create a values file
+cat > my-values.yaml <<EOF
+replicaCount: 2
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+EOF
+
+# Install with custom values
+helm install openawareness openawareness/openawareness-controller \
+  --namespace openawareness-system \
+  --create-namespace \
+  --values my-values.yaml
+```
+
+##### Alternative: Install from OCI Registry
+
+```sh
+helm install openawareness oci://ghcr.io/syndlex/charts/openawareness-controller \
+  --namespace openawareness-system \
+  --create-namespace
+```
+
+#### Option 2: Kubectl (Direct Installation)
+
+##### 1. Install CRDs
 ```sh
 make install
 ```
 
-#### 2. Deploy the Controller
+##### 2. Deploy the Controller
 
 **Option A: Deploy to MicroK8s (Recommended for local development)**
 
@@ -313,7 +368,71 @@ kubectl describe prometheusrule <name>
 2. **Alertmanager config errors**: Validate YAML syntax in the alertmanagerConfig field
 3. **Connection errors**: Verify Mimir endpoint in ClientConfig and network connectivity
 
+## Helm Chart Development
+
+### Generate Helm Chart from Kustomize
+
+The Helm chart is automatically generated from Kustomize manifests using `helmify`:
+
+```sh
+# Generate Helm chart
+make helm
+
+# Lint Helm chart
+make helm-lint
+
+# Package Helm chart
+make helm-package
+
+# Install chart locally for testing
+make helm-install
+
+# Uninstall chart
+make helm-uninstall
+```
+
+### Chart Structure
+
+```
+chart/openawareness-controller/
+├── Chart.yaml              # Chart metadata
+├── values.yaml             # Default values (auto-generated)
+├── .helmignore            # Files to ignore
+├── crds/                  # CRD definitions
+│   ├── clientconfigs-crd.yaml
+│   └── mimiralerttenants-crd.yaml
+└── templates/             # Kubernetes manifests
+    ├── deployment.yaml
+    ├── service.yaml
+    ├── serviceaccount.yaml
+    └── ...
+```
+
+### Updating the Chart
+
+When you modify Kubernetes manifests in `config/`, regenerate the Helm chart:
+
+```sh
+# Make changes to config/ files
+vim config/manager/manager.yaml
+
+# Regenerate chart
+make helm
+
+# Test the updated chart
+make helm-lint
+make helm-install
+```
+
 ## Uninstalling
+
+### Helm Installation
+
+```sh
+helm uninstall openawareness --namespace openawareness-system
+```
+
+### Kubectl Installation
 
 Delete sample resources:
 ```sh

@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint-and-test:
+    name: Lint and Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Run go fmt
+        run: make fmt
+
+      - name: Check formatting
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Code is not formatted. Run 'make fmt' locally."
+            git diff
+            exit 1
+          fi
+
+      - name: Run go vet
+        run: make vet
+
+      - name: Run golangci-lint
+        run: make lint
+
+      - name: Run unit tests
+        run: make test
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./cover.out
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  helm-validation:
+    name: Validate Helm Chart
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Generate Helm chart
+        run: make helm
+
+      - name: Lint Helm chart
+        run: make helm-lint
+
+      - name: Verify CRDs exist in chart
+        run: |
+          if [ ! -d "chart/openawareness-controller/crds" ]; then
+            echo "Error: CRDs directory not found in chart"
+            exit 1
+          fi
+          
+          if [ -z "$(ls -A chart/openawareness-controller/crds)" ]; then
+            echo "Error: CRDs directory is empty"
+            exit 1
+          fi
+          
+          echo "CRDs found:"
+          ls -la chart/openawareness-controller/crds/
+
+      - name: Package Helm chart
+        run: make helm-package
+
+      - name: Upload Helm chart artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: helm-chart
+          path: dist/*.tgz
+          retention-days: 30
