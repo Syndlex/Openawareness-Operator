@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//nolint:revive // utils is a standard package name for utilities
 package utils
 
 import (
@@ -34,42 +35,83 @@ func CategorizeError(err error) (string, string) {
 		return openawarenessv1beta1.ReasonSynced, "Operation successful"
 	}
 
-	errMsg := err.Error()
-
-	// Check for context timeout/deadline errors first (these are Go errors, not string-based)
+	// Check for context timeout/deadline errors first
 	if errors.Is(err, context.DeadlineExceeded) {
 		return openawarenessv1beta1.ReasonTimeoutError, "Operation deadline exceeded"
 	}
 
-	// Check for DNS errors (highest priority for network errors)
+	errMsg := err.Error()
+
+	// Check error categories in priority order
+	if reason, msg := checkDNSError(errMsg); reason != "" {
+		return reason, msg
+	}
+	if reason, msg := checkTimeoutError(errMsg); reason != "" {
+		return reason, msg
+	}
+	if reason, msg := checkNetworkError(errMsg); reason != "" {
+		return reason, msg
+	}
+	if reason, msg := checkURLError(errMsg); reason != "" {
+		return reason, msg
+	}
+	if reason, msg := checkTLSError(errMsg); reason != "" {
+		return reason, msg
+	}
+	if reason, msg := checkHTTPError(errMsg); reason != "" {
+		return reason, msg
+	}
+
+	// Default to network error for unknown errors
+	return openawarenessv1beta1.ReasonNetworkError, fmt.Sprintf("Connection failed: %s", errMsg)
+}
+
+func checkDNSError(errMsg string) (string, string) {
 	if strings.Contains(errMsg, "no such host") || strings.Contains(errMsg, "dns") {
 		return openawarenessv1beta1.ReasonDNSResolutionError, "DNS resolution failed"
 	}
+	return "", ""
+}
 
-	// Check for timeout errors
-	if strings.Contains(errMsg, "timeout") || strings.Contains(errMsg, "deadline exceeded") || strings.Contains(errMsg, "i/o timeout") {
+func checkTimeoutError(errMsg string) (string, string) {
+	if strings.Contains(errMsg, "timeout") ||
+		strings.Contains(errMsg, "deadline exceeded") ||
+		strings.Contains(errMsg, "i/o timeout") {
 		return openawarenessv1beta1.ReasonTimeoutError, "Connection timeout"
 	}
+	return "", ""
+}
 
-	// Check for connection refused or network errors
-	if strings.Contains(errMsg, "connection refused") || strings.Contains(errMsg, "connection reset") ||
-		strings.Contains(errMsg, "network") || strings.Contains(errMsg, "dial tcp") ||
+func checkNetworkError(errMsg string) (string, string) {
+	if strings.Contains(errMsg, "connection refused") ||
+		strings.Contains(errMsg, "connection reset") ||
+		strings.Contains(errMsg, "network") ||
+		strings.Contains(errMsg, "dial tcp") ||
 		strings.Contains(errMsg, "dial udp") {
 		return openawarenessv1beta1.ReasonNetworkError, "Network connection error"
 	}
+	return "", ""
+}
 
-	// Check for URL parsing errors (check after network errors since parse errors might mention "dial")
-	if strings.Contains(errMsg, "missing protocol scheme") || strings.Contains(errMsg, "invalid URL") ||
+func checkURLError(errMsg string) (string, string) {
+	if strings.Contains(errMsg, "missing protocol scheme") ||
+		strings.Contains(errMsg, "invalid URL") ||
 		strings.Contains(errMsg, "unsupported protocol") {
 		return openawarenessv1beta1.ReasonInvalidURL, "Invalid URL format"
 	}
+	return "", ""
+}
 
-	// Check for TLS errors
-	if strings.Contains(errMsg, "tls") || strings.Contains(errMsg, "certificate") || strings.Contains(errMsg, "x509") {
+func checkTLSError(errMsg string) (string, string) {
+	if strings.Contains(errMsg, "tls") ||
+		strings.Contains(errMsg, "certificate") ||
+		strings.Contains(errMsg, "x509") {
 		return openawarenessv1beta1.ReasonInvalidTLSConfig, "TLS configuration error"
 	}
+	return "", ""
+}
 
-	// Check for HTTP status code errors
+func checkHTTPError(errMsg string) (string, string) {
 	if strings.Contains(errMsg, "401") || strings.Contains(errMsg, "unauthorized") {
 		return openawarenessv1beta1.ReasonUnauthorized, "Authentication failed"
 	}
@@ -90,9 +132,7 @@ func CategorizeError(err error) (string, string) {
 		strings.Contains(errMsg, "server error") {
 		return openawarenessv1beta1.ReasonServerError, "Server error"
 	}
-
-	// Default to network error for unknown errors
-	return openawarenessv1beta1.ReasonNetworkError, fmt.Sprintf("Connection failed: %s", errMsg)
+	return "", ""
 }
 
 // SetCondition sets or updates a condition in the conditions list.

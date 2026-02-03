@@ -214,10 +214,10 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 HELMIFY ?= $(LOCALBIN)/helmify
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v5.4.3
-CONTROLLER_TOOLS_VERSION ?= v0.16.1
-ENVTEST_VERSION ?= release-0.19
-GOLANGCI_LINT_VERSION ?= v1.59.1
+KUSTOMIZE_VERSION ?= v5.8.0
+CONTROLLER_TOOLS_VERSION ?= v0.20.0
+ENVTEST_VERSION ?= release-0.23.1
+GOLANGCI_LINT_VERSION ?= v2.8.0
 HELMIFY_VERSION ?= v0.4.19
 
 .PHONY: kustomize
@@ -238,7 +238,14 @@ $(ENVTEST): $(LOCALBIN)
 .PHONY: golangci-lint
 golangci-lint: $(GOLANGCI_LINT) ## Download golangci-lint locally if necessary.
 $(GOLANGCI_LINT): $(LOCALBIN)
-	$(call go-install-tool,$(GOLANGCI_LINT),github.com/golangci/golangci-lint/cmd/golangci-lint,$(GOLANGCI_LINT_VERSION))
+	@[ -f "$(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION)" ] || { \
+	set -e; \
+	echo "Downloading golangci-lint $(GOLANGCI_LINT_VERSION)" ;\
+	rm -f $(GOLANGCI_LINT) || true ;\
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION) ;\
+	mv $(GOLANGCI_LINT) $(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION) ;\
+	} ;\
+	ln -sf $(GOLANGCI_LINT)-$(GOLANGCI_LINT_VERSION) $(GOLANGCI_LINT)
 
 .PHONY: helmify
 helmify: $(HELMIFY) ## Download helmify locally if necessary.

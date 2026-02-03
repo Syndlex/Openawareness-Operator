@@ -238,19 +238,19 @@ func VerifyFailedSync(alertTenant *openawarenessv1beta1.MimirAlertTenant) {
 }
 
 // CreateMimirClient creates a Mimir client for testing API verification.
-func CreateMimirClient(ctx context.Context, address, tenant string) (*mimir.MimirClient, error) {
+func CreateMimirClient(ctx context.Context, address, tenant string) (*mimir.Client, error) {
 	cfg := mimir.Config{
 		Address:  address,
-		TenantId: tenant,
+		TenantID: tenant,
 	}
-	return mimir.New(cfg, ctx)
+	return mimir.New(ctx, cfg)
 }
 
 // VerifyMimirAPIConfig verifies that configuration was pushed to Mimir API.
 // It checks that the config contains the expected receiver name.
 func VerifyMimirAPIConfig(
 	ctx context.Context,
-	mimirClient *mimir.MimirClient,
+	mimirClient *mimir.Client,
 	expectedReceiver string,
 	timeout, interval time.Duration,
 ) error {
@@ -273,7 +273,7 @@ func VerifyMimirAPIConfig(
 // VerifyMimirAPITemplate verifies that a template was pushed to Mimir API.
 func VerifyMimirAPITemplate(
 	ctx context.Context,
-	mimirClient *mimir.MimirClient,
+	mimirClient *mimir.Client,
 	templateName string,
 	timeout, interval time.Duration,
 ) error {
@@ -296,7 +296,7 @@ func VerifyMimirAPITemplate(
 // VerifyMimirAPIConfigDeleted verifies that configuration was deleted from Mimir API.
 func VerifyMimirAPIConfigDeleted(
 	ctx context.Context,
-	mimirClient *mimir.MimirClient,
+	mimirClient *mimir.Client,
 	timeout, interval time.Duration,
 ) error {
 	Eventually(func() error {

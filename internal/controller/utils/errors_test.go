@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//nolint:revive // utils is a standard package name for utilities
 package utils
 
 import (
@@ -266,9 +267,4 @@ func TestSetConditionNilList(t *testing.T) {
 
 	// Should handle nil pointer gracefully without panic
 	SetCondition(conditions, newCondition)
-
-	// Verify function returned early without modifying nil pointer
-	if conditions != nil {
-		t.Errorf("SetCondition() should not modify a nil pointer")
-	}
 }

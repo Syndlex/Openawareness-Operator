@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package monitoringcoreoscom provides controllers for monitoring.coreos.com CRDs.
 package monitoringcoreoscom
 
 import (
@@ -44,6 +45,7 @@ type PrometheusRulesReconciler struct {
 }
 
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
+//nolint:lll
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
@@ -79,16 +81,20 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		r.Recorder.Event(rule, corev1.EventTypeWarning, "ClientNotFound",
 			fmt.Sprintf("No client configuration found: %v", err))
-		logger.V(1).Info("No Alertmanager client found. Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig", "name", rule.Name, "namespace", rule.Namespace)
+		logger.V(1).Info(
+			"No Alertmanager client found. Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig",
+			"name", rule.Name,
+			"namespace", rule.Namespace,
+		)
 		return ctrl.Result{}, nil
 	}
 
 	namespace := r.getNamespaceFromAnnotations(logger, rule)
 
-	if rule.ObjectMeta.DeletionTimestamp.IsZero() {
+	if rule.DeletionTimestamp.IsZero() {
 		// Register finalizer
-		if !controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
-			controllerutil.AddFinalizer(rule, utils.MyFinalizerName)
+		if !controllerutil.ContainsFinalizer(rule, utils.FinalizerAnnotation) {
+			controllerutil.AddFinalizer(rule, utils.FinalizerAnnotation)
 			if err := r.Update(ctx, rule); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -126,8 +132,8 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			"Successfully deleted all rule groups from Mimir")
 
 		// The object is being deleted check for finalizer
-		if controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
-			controllerutil.RemoveFinalizer(rule, utils.MyFinalizerName)
+		if controllerutil.ContainsFinalizer(rule, utils.FinalizerAnnotation) {
+			controllerutil.RemoveFinalizer(rule, utils.FinalizerAnnotation)
 			if err := r.Update(ctx, rule); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -140,9 +146,9 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 // convert transforms PrometheusRule RuleGroups to Mimir's rulefmt.RuleGroup format.
 // It processes each rule group and converts individual rules to the appropriate format.
 func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
-	returnGroups := make([]rulefmt.RuleGroup, 0)
+	returnGroups := make([]rulefmt.RuleGroup, 0, len(groups))
 	for _, group := range groups {
-		returnRules := make([]rulefmt.Rule, 0)
+		returnRules := make([]rulefmt.Rule, 0, len(group.Rules))
 		for _, rule := range group.Rules {
 			returnRules = append(returnRules, newRule(rule))
 		}
@@ -174,32 +180,75 @@ func newRule(rule monitoringv1.Rule) rulefmt.Rule {
 // clientFromAnnotation retrieves the appropriate Mimir client for the given PrometheusRule.
 // It extracts the client name from the resource's annotations and returns the cached client.
 // Returns an error if the annotation is missing or if the client is not found in the cache.
-func (r *PrometheusRulesReconciler) clientFromAnnotation(logger logr.Logger, rule *monitoringv1.PrometheusRule) (clients.AwarenessClient, error) {
+func (r *PrometheusRulesReconciler) clientFromAnnotation(
+	logger logr.Logger,
+	rule *monitoringv1.PrometheusRule,
+) (clients.AwarenessClient, error) {
 	if rule.Annotations == nil {
-		logger.Info("PrometheusRule is missing client annotation", "annotation", utils.ClientNameAnnotation, "name", rule.Name, "namespace", rule.Namespace)
-		return nil, fmt.Errorf("annotation %s is missing for PrometheusRule %s/%s", utils.ClientNameAnnotation, rule.Namespace, rule.Name)
+		logger.Info(
+			"PrometheusRule is missing client annotation",
+			"annotation", utils.ClientNameAnnotation,
+			"name", rule.Name,
+			"namespace", rule.Namespace,
+		)
+		return nil, fmt.Errorf(
+			"annotation %s is missing for PrometheusRule %s/%s",
+			utils.ClientNameAnnotation,
+			rule.Namespace,
+			rule.Name,
+		)
 	}
 
 	clientName := rule.Annotations[utils.ClientNameAnnotation]
 	if clientName == "" {
-		logger.Info("PrometheusRule client annotation is empty", "annotation", utils.ClientNameAnnotation, "name", rule.Name, "namespace", rule.Namespace)
-		return nil, fmt.Errorf("annotation %s is empty for PrometheusRule %s/%s", utils.ClientNameAnnotation, rule.Namespace, rule.Name)
+		logger.Info(
+			"PrometheusRule client annotation is empty",
+			"annotation", utils.ClientNameAnnotation,
+			"name", rule.Name,
+			"namespace", rule.Namespace,
+		)
+		return nil, fmt.Errorf(
+			"annotation %s is empty for PrometheusRule %s/%s",
+			utils.ClientNameAnnotation,
+			rule.Namespace,
+			rule.Name,
+		)
 	}
 
 	alertManagerClient, err := r.RulerClients.GetClient(clientName)
 	if err != nil {
-		logger.Info("Client does not exist in cache", "clientName", clientName, "name", rule.Name, "namespace", rule.Namespace)
-		return nil, fmt.Errorf("getting client %s for PrometheusRule %s/%s: %w", clientName, rule.Namespace, rule.Name, err)
+		logger.Info(
+			"Client does not exist in cache",
+			"clientName", clientName,
+			"name", rule.Name,
+			"namespace", rule.Namespace,
+		)
+		return nil, fmt.Errorf(
+			"getting client %s for PrometheusRule %s/%s: %w",
+			clientName,
+			rule.Namespace,
+			rule.Name,
+			err,
+		)
 	}
 	return alertManagerClient, nil
 }
 
 // getNamespaceFromAnnotations extracts the Mimir tenant namespace from the PrometheusRule annotations.
 // Returns the tenant ID from the annotation, or the default tenant ID if the annotation is not set.
-func (r *PrometheusRulesReconciler) getNamespaceFromAnnotations(logger logr.Logger, rule *monitoringv1.PrometheusRule) string {
+func (r *PrometheusRulesReconciler) getNamespaceFromAnnotations(
+	logger logr.Logger,
+	rule *monitoringv1.PrometheusRule,
+) string {
 	mimirNamespace := rule.Annotations[utils.MimirTenantAnnotation]
 	if mimirNamespace == "" {
-		logger.V(1).Info("Using default tenant ID because annotation is missing", "annotation", utils.MimirTenantAnnotation, "defaultTenant", utils.DefaultTenantID, "name", rule.Name, "namespace", rule.Namespace)
+		logger.V(1).Info(
+			"Using default tenant ID because annotation is missing",
+			"annotation", utils.MimirTenantAnnotation,
+			"defaultTenant", utils.DefaultTenantID,
+			"name", rule.Name,
+			"namespace", rule.Namespace,
+		)
 		return utils.DefaultTenantID
 	}
 	return mimirNamespace

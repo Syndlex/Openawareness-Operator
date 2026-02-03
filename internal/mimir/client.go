@@ -1,3 +1,4 @@
+// Package mimir provides client implementations for interacting with Grafana Mimir APIs.
 package mimir
 
 import (
@@ -23,6 +24,7 @@ const (
 )
 
 var (
+	// ErrResourceNotFound indicates the requested resource was not found (404)
 	ErrResourceNotFound = errors.New("requested resource not found")
 	errConflict         = errors.New("conflict with current state of target resource")
 	errTooManyRequests  = errors.New("too many requests")
@@ -30,7 +32,7 @@ var (
 
 // UserAgent returns build information in format suitable to be used in HTTP User-Agent header.
 func UserAgent() string {
-	return fmt.Sprintf("openawareness.operator")
+	return "openawareness.operator"
 }
 
 // Config is used to configure a MimirClient.
@@ -38,7 +40,7 @@ type Config struct {
 	User            string `yaml:"user"`
 	Key             string `yaml:"key"`
 	Address         string `yaml:"address"`
-	TenantId        string `yaml:"tenantid"`
+	TenantID        string `yaml:"tenantid"`
 	TLS             tls.ClientConfig
 	UseLegacyRoutes bool              `yaml:"use_legacy_routes"`
 	MimirHTTPPrefix string            `yaml:"mimir_http_prefix"`
@@ -46,8 +48,8 @@ type Config struct {
 	ExtraHeaders    map[string]string `yaml:"extra_headers"`
 }
 
-// MimirClient is a client to the Mimir API.
-type MimirClient struct {
+// Client is a client to the Mimir API.
+type Client struct {
 	user         string
 	key          string
 	id           string
@@ -59,24 +61,24 @@ type MimirClient struct {
 	log          logr.Logger
 }
 
-// New returns a new MimirClient.
-func New(cfg Config, ctx context.Context) (*MimirClient, error) {
-	log := log.FromContext(ctx)
+// New returns a new Client.
+func New(ctx context.Context, cfg Config) (*Client, error) {
+	logger := log.FromContext(ctx)
 	endpoint, err := url.Parse(cfg.Address)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Info("New Mimir client created",
+	logger.Info("New Mimir client created",
 		"address", cfg.Address,
-		"id", cfg.TenantId)
+		"id", cfg.TenantID)
 
 	client := http.Client{}
 
 	// Setup TLS client
 	tlsConfig, err := cfg.TLS.GetTLSConfig()
 	if err != nil {
-		log.Error(err, "Mimir client initialization unsuccessful",
+		logger.Error(err, "Mimir client initialization unsuccessful",
 			"tls-ca", cfg.TLS.CAPath,
 			"tls-cert", cfg.TLS.CertPath,
 			"tls-key", cfg.TLS.KeyPath,
@@ -100,22 +102,22 @@ func New(cfg Config, ctx context.Context) (*MimirClient, error) {
 		}
 	}
 
-	return &MimirClient{
+	return &Client{
 		user:         cfg.User,
 		key:          cfg.Key,
-		id:           cfg.TenantId,
+		id:           cfg.TenantID,
 		endpoint:     endpoint,
 		Client:       client,
 		apiPath:      path,
 		authToken:    cfg.AuthToken,
 		extraHeaders: cfg.ExtraHeaders,
-		log:          log,
+		log:          logger,
 	}, nil
 }
 
 // HealthCheck performs a lightweight health check by attempting to list rules
 // for an empty namespace. This verifies connectivity, authentication, and basic API access.
-func (r *MimirClient) HealthCheck(ctx context.Context) error {
+func (r *Client) HealthCheck(ctx context.Context) error {
 	r.log.V(1).Info("Performing health check")
 
 	// Use a simple API call to verify connectivity
@@ -127,14 +129,14 @@ func (r *MimirClient) HealthCheck(ctx context.Context) error {
 		r.log.Error(err, "Health check failed")
 		return err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 
 	r.log.Info("Health check successful", "status", res.Status)
 	return nil
 }
 
 // Query executes a PromQL query against the Mimir cluster.
-func (r *MimirClient) Query(ctx context.Context, query string) (*http.Response, error) {
+func (r *Client) Query(ctx context.Context, query string) (*http.Response, error) {
 	req := fmt.Sprintf("/prometheus/api/v1/query?query=%s&time=%d", url.QueryEscape(query), time.Now().Unix())
 
 	res, err := r.doRequest(ctx, req, "GET", nil, -1)
@@ -145,7 +147,12 @@ func (r *MimirClient) Query(ctx context.Context, query string) (*http.Response, 
 	return res, nil
 }
 
-func (r *MimirClient) doRequest(ctx context.Context, path, method string, payload io.Reader, contentLength int64) (*http.Response, error) {
+func (r *Client) doRequest(
+	ctx context.Context,
+	path, method string,
+	payload io.Reader,
+	contentLength int64,
+) (*http.Response, error) {
 	req, err := buildRequest(ctx, path, method, *r.endpoint, payload, contentLength)
 	if err != nil {
 		return nil, err
@@ -198,51 +205,51 @@ func (r *MimirClient) doRequest(ctx context.Context, path, method string, payloa
 }
 
 // checkResponse checks an API response for errors.
-func (m *MimirClient) checkResponse(r *http.Response) error {
-	m.log.Info("checking response", "status", r.Status)
+func (r *Client) checkResponse(resp *http.Response) error {
+	r.log.Info("checking response", "status", resp.Status)
 
-	if 200 <= r.StatusCode && r.StatusCode <= 299 {
+	if 200 <= resp.StatusCode && resp.StatusCode <= 299 {
 		return nil
 	}
 
-	bodyHead, err := io.ReadAll(io.LimitReader(r.Body, 1024))
+	bodyHead, err := io.ReadAll(io.LimitReader(resp.Body, 1024))
 	if err != nil {
 		return fmt.Errorf("reading body: %w", err)
 	}
 	bodyStr := string(bodyHead)
 	const msg = "response"
-	if r.StatusCode == http.StatusNotFound {
-		m.log.Info(msg,
-			"status", r.Status,
+	if resp.StatusCode == http.StatusNotFound {
+		r.log.Info(msg,
+			"status", resp.Status,
 			"body", bodyStr,
 		)
 		return ErrResourceNotFound
 	}
-	if r.StatusCode == http.StatusConflict {
-		m.log.Info(msg,
-			"status", r.Status,
+	if resp.StatusCode == http.StatusConflict {
+		r.log.Info(msg,
+			"status", resp.Status,
 			"body", bodyStr,
 		)
 		return errConflict
 	}
-	if r.StatusCode == http.StatusTooManyRequests {
-		m.log.Info(msg,
-			"status", r.Status,
+	if resp.StatusCode == http.StatusTooManyRequests {
+		r.log.Info(msg,
+			"status", resp.Status,
 			"body", bodyStr,
 		)
 		return errTooManyRequests
 	}
 
-	m.log.Info(msg,
-		"status", r.Status,
+	r.log.Info(msg,
+		"status", resp.Status,
 		"body", bodyStr,
 	)
 
 	var errMsg string
 	if bodyStr == "" {
-		errMsg = fmt.Sprintf("server returned HTTP status: %s", r.Status)
+		errMsg = fmt.Sprintf("server returned HTTP status: %s", resp.Status)
 	} else {
-		errMsg = fmt.Sprintf("server returned HTTP status: %s, body: %q", r.Status, bodyStr)
+		errMsg = fmt.Sprintf("server returned HTTP status: %s, body: %q", resp.Status, bodyStr)
 	}
 
 	return errors.New(errMsg)
@@ -254,7 +261,13 @@ func joinPath(baseURLPath, targetPath string) string {
 	return strings.TrimSuffix(baseURLPath, "/") + targetPath
 }
 
-func buildRequest(ctx context.Context, p, m string, endpoint url.URL, payload io.Reader, contentLength int64) (*http.Request, error) {
+func buildRequest(
+	ctx context.Context,
+	p, m string,
+	endpoint url.URL,
+	payload io.Reader,
+	contentLength int64,
+) (*http.Request, error) {
 	// parse path parameter again (as it already contains escaped path information
 	pURL, err := url.Parse(p)
 	if err != nil {

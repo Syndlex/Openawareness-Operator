@@ -39,6 +39,7 @@ type MimirAlertTenantReconciler struct {
 	Scheme       *runtime.Scheme
 }
 
+//nolint:lll
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants/finalizers,verbs=update
@@ -67,10 +68,10 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 	logger.Info("Found MimirAlertTenant", "name", rule.Name, "namespace", rule.Namespace)
 
-	if rule.ObjectMeta.DeletionTimestamp.IsZero() {
+	if rule.DeletionTimestamp.IsZero() {
 		// Register finalizer first, before checking for client
-		if !controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
-			controllerutil.AddFinalizer(rule, utils.MyFinalizerName)
+		if !controllerutil.ContainsFinalizer(rule, utils.FinalizerAnnotation) {
+			controllerutil.AddFinalizer(rule, utils.FinalizerAnnotation)
 			if err := r.Update(ctx, rule); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -140,8 +141,8 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			// If we can't get the client, we still need to remove the finalizer
 			// to allow deletion to proceed. This may leave orphaned configuration in Mimir.
 			// Operators should manually clean up if needed.
-			if controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
-				controllerutil.RemoveFinalizer(rule, utils.MyFinalizerName)
+			if controllerutil.ContainsFinalizer(rule, utils.FinalizerAnnotation) {
+				controllerutil.RemoveFinalizer(rule, utils.FinalizerAnnotation)
 				if err := r.Update(ctx, rule); err != nil {
 					return ctrl.Result{}, err
 				}
@@ -164,8 +165,8 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 
 		// Remove finalizer
-		if controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
-			controllerutil.RemoveFinalizer(rule, utils.MyFinalizerName)
+		if controllerutil.ContainsFinalizer(rule, utils.FinalizerAnnotation) {
+			controllerutil.RemoveFinalizer(rule, utils.FinalizerAnnotation)
 			if err := r.Update(ctx, rule); err != nil {
 				return ctrl.Result{}, err
 			}
@@ -182,7 +183,11 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 // It extracts the client name and tenant ID from the resource's annotations,
 // fetches the ClientConfig, and returns a tenant-specific Mimir client.
 // Returns an error if annotations are missing or if the client cannot be created.
-func (r *MimirAlertTenantReconciler) clientFromCrd(ctx context.Context, logger logr.Logger, rule *openawarenessv1beta1.MimirAlertTenant) (clients.AwarenessClient, error) {
+func (r *MimirAlertTenantReconciler) clientFromCrd(
+	ctx context.Context,
+	logger logr.Logger,
+	rule *openawarenessv1beta1.MimirAlertTenant,
+) (clients.AwarenessClient, error) {
 	if r.RulerClients == nil {
 		logger.Info("RulerClients cache is not initialized")
 		return nil, fmt.Errorf("ruler clients cache is nil for MimirAlertTenant %s/%s", rule.Namespace, rule.Name)
@@ -210,10 +215,10 @@ func (r *MimirAlertTenantReconciler) clientFromCrd(ctx context.Context, logger l
 
 	// Get or create a client specific to this tenant
 	alertManagerClient, err := r.RulerClients.GetOrCreateMimirClient(
+		ctx,
 		clientConfig.Spec.Address,
 		clientName,
 		tenantID,
-		ctx,
 	)
 	if err != nil {
 		logger.Error(err, "Failed to get or create Mimir client",

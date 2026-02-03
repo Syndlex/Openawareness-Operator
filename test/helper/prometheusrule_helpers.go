@@ -27,7 +27,6 @@ import (
 	"github.com/syndlex/openawareness-controller/internal/mimir"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -65,34 +64,6 @@ func CreatePrometheusRule(
 	return prometheusRule, nil
 }
 
-// CreateSimplePrometheusRule creates a PrometheusRule with a single alert rule for testing.
-func CreateSimplePrometheusRule(
-	ctx context.Context,
-	k8sClient client.Client,
-	name, namespace string,
-	clientName, tenant string,
-) (*monitoringv1.PrometheusRule, error) {
-	groups := []monitoringv1.RuleGroup{
-		{
-			Name: "test-alerts",
-			Rules: []monitoringv1.Rule{
-				{
-					Alert: "TestAlert",
-					Expr:  intstr.FromString("up == 0"),
-					Labels: map[string]string{
-						"severity": "warning",
-					},
-					Annotations: map[string]string{
-						"summary": "Test alert",
-					},
-				},
-			},
-		},
-	}
-
-	return CreatePrometheusRule(ctx, k8sClient, name, namespace, clientName, tenant, groups)
-}
-
 // WaitForPrometheusRuleCreation waits for a PrometheusRule to be created.
 func WaitForPrometheusRuleCreation(
 	ctx context.Context,
@@ -128,7 +99,7 @@ func WaitForPrometheusRuleFinalizerAdded(
 		}
 
 		for _, finalizer := range prometheusRule.GetFinalizers() {
-			if finalizer == utils.MyFinalizerName {
+			if finalizer == utils.FinalizerAnnotation {
 				return true
 			}
 		}
@@ -182,39 +153,10 @@ func UpdatePrometheusRuleGroups(
 	return nil
 }
 
-// AddPrometheusRuleAnnotation adds an annotation to a PrometheusRule.
-// It handles potential update conflicts by retrying.
-func AddPrometheusRuleAnnotation(
-	ctx context.Context,
-	k8sClient client.Client,
-	name, namespace string,
-	key, value string,
-	timeout, interval time.Duration,
-) error {
-	Eventually(func() error {
-		prometheusRule := &monitoringv1.PrometheusRule{}
-		if err := k8sClient.Get(ctx, types.NamespacedName{
-			Name:      name,
-			Namespace: namespace,
-		}, prometheusRule); err != nil {
-			return err
-		}
-
-		if prometheusRule.Annotations == nil {
-			prometheusRule.Annotations = make(map[string]string)
-		}
-		prometheusRule.Annotations[key] = value
-
-		return k8sClient.Update(ctx, prometheusRule)
-	}, timeout, interval).Should(Succeed(), "Should add annotation to PrometheusRule")
-
-	return nil
-}
-
 // VerifyMimirRuleGroup verifies that a rule group exists in Mimir API.
 func VerifyMimirRuleGroup(
 	ctx context.Context,
-	mimirClient *mimir.MimirClient,
+	mimirClient *mimir.Client,
 	namespace, groupName string,
 	timeout, interval time.Duration,
 ) error {
@@ -228,7 +170,7 @@ func VerifyMimirRuleGroup(
 // VerifyMimirRuleGroupDeleted verifies that a rule group has been deleted from Mimir API.
 func VerifyMimirRuleGroupDeleted(
 	ctx context.Context,
-	mimirClient *mimir.MimirClient,
+	mimirClient *mimir.Client,
 	namespace, groupName string,
 	timeout, interval time.Duration,
 ) error {
@@ -259,7 +201,7 @@ func VerifyMimirRuleGroupDeleted(
 // VerifyMimirRuleGroupContent verifies the content of a rule group in Mimir API.
 func VerifyMimirRuleGroupContent(
 	ctx context.Context,
-	mimirClient *mimir.MimirClient,
+	mimirClient *mimir.Client,
 	namespace, groupName string,
 	expectedRuleCount int,
 	timeout, interval time.Duration,
@@ -275,7 +217,7 @@ func VerifyMimirRuleGroupContent(
 // verifyMimirRuleGroupCondition is a helper that reduces duplication in Mimir verification functions.
 func verifyMimirRuleGroupCondition(
 	ctx context.Context,
-	mimirClient *mimir.MimirClient,
+	mimirClient *mimir.Client,
 	namespace, groupName string,
 	timeout, interval time.Duration,
 	condition func(*rulefmt.RuleGroup) bool,
@@ -302,47 +244,4 @@ func verifyMimirRuleGroupCondition(
 	}, timeout, interval).Should(BeTrue(), messageFormat, namespace)
 
 	return nil
-}
-
-// GetPrometheusRule retrieves a PrometheusRule resource.
-func GetPrometheusRule(
-	ctx context.Context,
-	k8sClient client.Client,
-	name, namespace string,
-) (*monitoringv1.PrometheusRule, error) {
-	prometheusRule := &monitoringv1.PrometheusRule{}
-	err := k8sClient.Get(ctx, types.NamespacedName{
-		Name:      name,
-		Namespace: namespace,
-	}, prometheusRule)
-	if err != nil {
-		return nil, err
-	}
-	return prometheusRule, nil
-}
-
-// BuildAlertRule creates a monitoringv1.Rule with an alert configuration.
-func BuildAlertRule(name, expr string, labels, annotations map[string]string) monitoringv1.Rule {
-	return monitoringv1.Rule{
-		Alert:       name,
-		Expr:        intstr.FromString(expr),
-		Labels:      labels,
-		Annotations: annotations,
-	}
-}
-
-// BuildRecordingRule creates a monitoringv1.Rule with a recording rule configuration.
-func BuildRecordingRule(record, expr string) monitoringv1.Rule {
-	return monitoringv1.Rule{
-		Record: record,
-		Expr:   intstr.FromString(expr),
-	}
-}
-
-// BuildRuleGroup creates a monitoringv1.RuleGroup with the specified name and rules.
-func BuildRuleGroup(name string, rules ...monitoringv1.Rule) monitoringv1.RuleGroup {
-	return monitoringv1.RuleGroup{
-		Name:  name,
-		Rules: rules,
-	}
 }

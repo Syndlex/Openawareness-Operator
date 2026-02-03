@@ -107,7 +107,7 @@ receivers:
 			Expect(err).NotTo(HaveOccurred())
 
 			// Finalizer SHOULD be added before client lookup
-			Expect(resource.Finalizers).To(ContainElement(utils.MyFinalizerName))
+			Expect(resource.Finalizers).To(ContainElement(utils.FinalizerAnnotation))
 		})
 
 		It("should successfully process the resource (verification test)", func() {

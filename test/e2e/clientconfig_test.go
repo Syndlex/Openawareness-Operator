@@ -21,12 +21,10 @@ package e2e
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
 	"github.com/syndlex/openawareness-controller/internal/controller/utils"
 	"github.com/syndlex/openawareness-controller/test/helper"
+	corev1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("ClientConfig E2E", Ordered, func() {
@@ -59,7 +57,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 
 		It("Should update status to Connected", func() {
 			By("Creating a ClientConfig with valid Mimir address")
-			clientConfig, err := helper.CreateClientConfig(
+			_, err := helper.CreateClientConfig(
 				ctx, k8sClient,
 				clientConfigName, testNamespace,
 				MimirGatewayAddress,
@@ -75,7 +73,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying ConnectionStatus is Connected")
-			clientConfig, err = helper.WaitForConnectionStatus(ctx, k8sClient, clientConfigName, testNamespace, "Connected", timeout, interval)
+			clientConfig, err := helper.WaitForConnectionStatus(ctx, k8sClient, clientConfigName, testNamespace, "Connected", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying status conditions")
@@ -91,7 +89,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 
 		It("Should update status to Disconnected with InvalidURL reason", func() {
 			By("Creating a ClientConfig with invalid URL")
-			clientConfig, err := helper.CreateClientConfig(
+			_, err := helper.CreateClientConfig(
 				ctx, k8sClient,
 				clientConfigName, testNamespace,
 				"://invalid-url-format",
@@ -103,7 +101,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for status conditions to be set")
-			clientConfig, err = helper.WaitForConditionsSet(ctx, k8sClient, clientConfigName, testNamespace, timeout, interval)
+			clientConfig, err := helper.WaitForConditionsSet(ctx, k8sClient, clientConfigName, testNamespace, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying status shows disconnection")
@@ -119,7 +117,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 
 		It("Should update status to Disconnected with network error", func() {
 			By("Creating a ClientConfig with unreachable host")
-			clientConfig, err := helper.CreateClientConfig(
+			_, err := helper.CreateClientConfig(
 				ctx, k8sClient,
 				clientConfigName, testNamespace,
 				"http://unreachable-host-12345.local:9009",
@@ -131,7 +129,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for status conditions to be set")
-			clientConfig, err = helper.WaitForConditionsSet(ctx, k8sClient, clientConfigName, testNamespace, timeout, interval)
+			clientConfig, err := helper.WaitForConditionsSet(ctx, k8sClient, clientConfigName, testNamespace, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying status shows network error")
@@ -147,7 +145,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 
 		It("Should transition from Disconnected to Connected", func() {
 			By("Creating a ClientConfig with invalid URL initially")
-			clientConfig, err := helper.CreateClientConfig(
+			_, err := helper.CreateClientConfig(
 				ctx, k8sClient,
 				clientConfigName, testNamespace,
 				"://invalid-initially",
@@ -169,7 +167,7 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Waiting for ConnectionStatus to transition to Connected")
-			clientConfig, err = helper.WaitForConnectionStatus(ctx, k8sClient, clientConfigName, testNamespace, "Connected", timeout, interval)
+			clientConfig, err := helper.WaitForConnectionStatus(ctx, k8sClient, clientConfigName, testNamespace, "Connected", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying status shows successful connection")
@@ -209,13 +207,3 @@ var _ = Describe("ClientConfig E2E", Ordered, func() {
 		})
 	})
 })
-
-// Helper function to find a condition by type in status
-func findConditionInStatus(conditions []metav1.Condition, conditionType string) *metav1.Condition {
-	for i := range conditions {
-		if conditions[i].Type == conditionType {
-			return &conditions[i]
-		}
-	}
-	return nil
-}

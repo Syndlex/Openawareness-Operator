@@ -125,7 +125,7 @@ receivers:
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying finalizer was added")
-			err = helper.WaitForFinalizerAdded(ctx, k8sClient, alertTenantName, testNamespace, "clientconfigs/finalizers", timeout, interval)
+			err = helper.WaitForFinalizerAdded(ctx, k8sClient, alertTenantName, testNamespace, utils.FinalizerAnnotation, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying annotations are correct")

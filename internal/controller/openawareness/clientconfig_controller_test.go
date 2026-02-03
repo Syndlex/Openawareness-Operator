@@ -137,7 +137,7 @@ var _ = Describe("ClientConfig Controller", func() {
 
 				By("Verifying error condition exists")
 				conditions := clientConfig.Status.Conditions
-				Expect(len(conditions)).To(BeNumerically(">", 0))
+				Expect(conditions).ToNot(BeEmpty())
 
 				readyCondition := helper.FindCondition(conditions, openawarenessv1beta1.ConditionTypeReady)
 				Expect(readyCondition).NotTo(BeNil())

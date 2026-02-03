@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package openawareness provides controllers for openawareness.syndlex CRDs.
 package openawareness
 
 import (
@@ -39,6 +40,7 @@ type ClientConfigReconciler struct {
 	Scheme       *runtime.Scheme
 }
 
+//nolint:lll
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=clientconfigs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=clientconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=clientconfigs/finalizers,verbs=update
@@ -63,7 +65,8 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	logger.Info("Found new Client Config", "name", clientConfig.Name, "namespace", clientConfig.Namespace)
 
 	// Handle finalizer lifecycle
-	isDeleting, err := utils.HandleFinalizer(ctx, r.Client, clientConfig, utils.MyFinalizerName, func(ctx context.Context) error {
+	//nolint:lll
+	isDeleting, err := utils.HandleFinalizer(ctx, r.Client, clientConfig, utils.FinalizerAnnotation, func(_ context.Context) error {
 		// Cleanup: remove client from cache
 		logger.Info("Removing client from cache", "name", clientConfig.Name, "namespace", clientConfig.Namespace)
 		r.RulerClients.RemoveClient(clientConfig.Name)
@@ -124,14 +127,17 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
 			}
 
-			err = r.RulerClients.AddMimirClient(spec.Address, clientConfig.Name, tenantID, ctx)
+			err = r.RulerClients.AddMimirClient(ctx, spec.Address, clientConfig.Name, tenantID)
 		case openawarenessv1beta1.Prometheus:
-			err = r.RulerClients.AddPromClient(spec.Address, clientConfig.Name, ctx)
+			err = r.RulerClients.AddPromClient(ctx, spec.Address, clientConfig.Name)
 		}
 
 		// Update status based on connection result
 		if err != nil {
-			logger.Error(err, "Failed to add client", "name", clientConfig.Name, "namespace", clientConfig.Namespace, "type", spec.Type)
+			logger.Error(err, "Failed to add client",
+				"name", clientConfig.Name,
+				"namespace", clientConfig.Namespace,
+				"type", spec.Type)
 			reason, message := utils.CategorizeError(err)
 			if statusErr := r.updateStatus(ctx, clientConfig,
 				openawarenessv1beta1.ConnectionStatusDisconnected,
@@ -146,7 +152,10 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
 		}
 
-		logger.Info("Added new Client Config", "name", clientConfig.Name, "namespace", clientConfig.Namespace, "type", spec.Type)
+		logger.Info("Added new Client Config",
+			"name", clientConfig.Name,
+			"namespace", clientConfig.Namespace,
+			"type", spec.Type)
 
 		// Update status to connected
 		if statusErr := r.updateStatus(ctx, clientConfig,

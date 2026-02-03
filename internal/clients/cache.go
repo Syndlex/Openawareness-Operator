@@ -1,3 +1,4 @@
+// Package clients provides client cache management for Mimir and Prometheus ruler APIs
 package clients
 
 import (
@@ -13,11 +14,16 @@ import (
 // RulerClientCacheInterface defines the interface for managing ruler clients.
 // It provides methods to add, remove, and retrieve clients for both Mimir and Prometheus.
 type RulerClientCacheInterface interface {
-	AddMimirClient(address string, name string, tenantID string, ctx context.Context) error
-	AddPromClient(address string, name string, ctx context.Context) error
+	AddMimirClient(ctx context.Context, address string, name string, tenantID string) error
+	AddPromClient(ctx context.Context, address string, name string) error
 	RemoveClient(name string)
 	GetClient(name string) (AwarenessClient, error)
-	GetOrCreateMimirClient(address string, clientName string, tenantID string, ctx context.Context) (AwarenessClient, error)
+	GetOrCreateMimirClient(
+		ctx context.Context,
+		address string,
+		clientName string,
+		tenantID string,
+	) (AwarenessClient, error)
 }
 
 // AwarenessClient defines the interface for interacting with rule and alert APIs.
@@ -53,18 +59,18 @@ func NewRulerClientCache() *RulerClientCache {
 // AddMimirClient creates a new Mimir client and adds it to the cache.
 // It performs a health check to verify connectivity before caching the client.
 // Returns an error if client creation or health check fails.
-func (e *RulerClientCache) AddMimirClient(address string, name string, tenantID string, ctx context.Context) error {
-	client, err := mimir.New(mimir.Config{
+func (e *RulerClientCache) AddMimirClient(ctx context.Context, address string, name string, tenantID string) error {
+	client, err := mimir.New(ctx, mimir.Config{
 		User:            "",
 		Key:             "",
 		Address:         address,
-		TenantId:        tenantID,
+		TenantID:        tenantID,
 		TLS:             tls.ClientConfig{},
 		UseLegacyRoutes: false,
 		MimirHTTPPrefix: "",
 		AuthToken:       "",
 		ExtraHeaders:    nil,
-	}, ctx)
+	})
 	if err != nil {
 		return fmt.Errorf("creating Mimir client: %w", err)
 	}
@@ -82,7 +88,12 @@ func (e *RulerClientCache) AddMimirClient(address string, name string, tenantID 
 // The cache key is a combination of clientName and tenantID to support multi-tenancy.
 // This ensures each tenant has its own isolated client instance.
 // Returns the cached or newly created client, or an error if creation fails.
-func (e *RulerClientCache) GetOrCreateMimirClient(address string, clientName string, tenantID string, ctx context.Context) (AwarenessClient, error) {
+func (e *RulerClientCache) GetOrCreateMimirClient(
+	ctx context.Context,
+	address string,
+	clientName string,
+	tenantID string,
+) (AwarenessClient, error) {
 	// Create composite key: clientName + tenantID
 	cacheKey := fmt.Sprintf("%s-%s", clientName, tenantID)
 
@@ -92,7 +103,7 @@ func (e *RulerClientCache) GetOrCreateMimirClient(address string, clientName str
 	}
 
 	// Create new client with tenant ID
-	if err := e.AddMimirClient(address, cacheKey, tenantID, ctx); err != nil {
+	if err := e.AddMimirClient(ctx, address, cacheKey, tenantID); err != nil {
 		return nil, fmt.Errorf("creating Mimir client for tenant %s: %w", tenantID, err)
 	}
 
@@ -119,6 +130,6 @@ func (e *RulerClientCache) GetClient(name string) (AwarenessClient, error) {
 
 // AddPromClient would create a Prometheus client and add it to the cache.
 // Currently not implemented - returns an error indicating this.
-func (e *RulerClientCache) AddPromClient(address string, name string, ctx context.Context) error {
-	return errors.New("Prometheus client not yet implemented")
+func (e *RulerClientCache) AddPromClient(_ context.Context, _ string, _ string) error {
+	return errors.New("prometheus client not yet implemented")
 }

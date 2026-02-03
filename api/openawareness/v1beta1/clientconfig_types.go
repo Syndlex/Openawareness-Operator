@@ -30,10 +30,13 @@ type ClientConfigSpec struct {
 	Type ClientType `json:"type,omitempty"`
 }
 
+// ClientType defines the type of client (Mimir or Prometheus)
 type ClientType string
 
 const (
-	Mimir      ClientType = "mimir"
+	// Mimir represents a Grafana Mimir client
+	Mimir ClientType = "mimir"
+	// Prometheus represents a Prometheus client
 	Prometheus ClientType = "prometheus"
 )
 
@@ -41,7 +44,9 @@ const (
 type ConnectionStatus string
 
 const (
-	ConnectionStatusConnected    ConnectionStatus = "Connected"
+	// ConnectionStatusConnected indicates successful connection to the target
+	ConnectionStatusConnected ConnectionStatus = "Connected"
+	// ConnectionStatusDisconnected indicates failed or lost connection to the target
 	ConnectionStatusDisconnected ConnectionStatus = "Disconnected"
 )
 
@@ -72,14 +77,10 @@ const (
 
 // Condition reasons for ClientConfig
 const (
-	// ReasonConfigured indicates the ClientConfig is properly configured
-	ReasonConfigured = "Configured"
 	// ReasonInvalidURL indicates the address cannot be parsed as a valid URL
 	ReasonInvalidURL = "InvalidURL"
 	// ReasonInvalidTLSConfig indicates the TLS configuration is invalid
 	ReasonInvalidTLSConfig = "InvalidTLSConfig"
-	// ReasonAuthConflict indicates both basic auth and token are configured
-	ReasonAuthConflict = "AuthConflict"
 	// ReasonNetworkError indicates a network connectivity error
 	ReasonNetworkError = "NetworkError"
 	// ReasonTimeoutError indicates the connection timed out

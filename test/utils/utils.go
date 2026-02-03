@@ -17,12 +17,10 @@ limitations under the License.
 package utils
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2" //nolint:golint,revive
 )
@@ -37,15 +35,6 @@ const (
 
 func warnError(err error) {
 	_, _ = fmt.Fprintf(GinkgoWriter, "warning: %v\n", err)
-}
-
-// InstallLGTMStack installs the prometheus Operator to be used to export the enabled metrics.
-func InstallLGTMStack() error {
-	url := fmt.Sprintf(lgtmStackUrl)
-
-	cmd := exec.Command("kubectl", "create", "-f", url)
-	_, err := Run(cmd)
-	return err
 }
 
 // Run executes the provided command within this context
@@ -67,47 +56,6 @@ func Run(cmd *exec.Cmd) ([]byte, error) {
 	return output, nil
 }
 
-// UninstallLGTMStack uninstalls the prometheus
-func UninstallLGTMStack() {
-	url := fmt.Sprintf(lgtmStackUrl)
-	cmd := exec.Command("kubectl", "delete", "-f", url)
-	if _, err := Run(cmd); err != nil {
-		warnError(err)
-	}
-}
-
-// LoadImageToMicroK8sClusterWithName loads a local docker image to the kind cluster
-func LoadImageToMicroK8sClusterWithName(name string) error {
-	cmd := exec.Command("podman", "image", "save", name)
-	output, err := Run(cmd)
-	if err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "running: %s\n", output)
-		return err
-	}
-
-	_, _ = fmt.Fprintf(GinkgoWriter, "Importing %s into k8s setup\n", name)
-
-	kindOptions := []string{"images", "import"}
-	cmd = exec.Command("microk8s", kindOptions...)
-	cmd.Stdin = bytes.NewBuffer(output)
-	_, err = Run(cmd)
-	return err
-}
-
-// GetNonEmptyLines converts given command output string into individual objects
-// according to line breakers, and ignores the empty elements in it.
-func GetNonEmptyLines(output string) []string {
-	var res []string
-	elements := strings.Split(output, "\n")
-	for _, element := range elements {
-		if element != "" {
-			res = append(res, element)
-		}
-	}
-
-	return res
-}
-
 // GetProjectDir will return the directory where the project is
 func GetProjectDir() (string, error) {
 	wd, err := os.Getwd()
@@ -124,7 +72,7 @@ func InstallMimir() error {
 
 	// Check if namespace exists
 	cmd := exec.Command("kubectl", "get", "namespace", mimirNamespace)
-	output, err := Run(cmd)
+	_, err := Run(cmd)
 
 	if err != nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Installing Mimir via Helm (lightweight config for e2e tests)...\n")
@@ -197,7 +145,7 @@ func InstallMimir() error {
 
 		// Check if Helm release exists
 		cmd = exec.Command("helm", "list", "-n", mimirNamespace)
-		output, err = Run(cmd)
+		output, err := Run(cmd)
 		if err != nil {
 			return fmt.Errorf("checking Helm releases: %w", err)
 		}
@@ -210,27 +158,4 @@ func InstallMimir() error {
 	}
 
 	return nil
-}
-
-// UninstallMimir uninstalls Mimir and cleans up resources
-func UninstallMimir() {
-	_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling Mimir...\n")
-
-	// Uninstall Helm release
-	cmd := exec.Command("helm", "uninstall", mimirRelease, "-n", mimirNamespace)
-	if _, err := Run(cmd); err != nil {
-		_, _ = fmt.Fprintf(GinkgoWriter, "Mimir not installed via Helm or already removed\n")
-	}
-
-	// Delete namespace with a short timeout to avoid hanging
-	_, _ = fmt.Fprintf(GinkgoWriter, "Deleting Mimir namespace...\n")
-	cmd = exec.Command("kubectl", "delete", "namespace", mimirNamespace, "--ignore-not-found=true", "--timeout=60s")
-	if _, err := Run(cmd); err != nil {
-		warnError(fmt.Errorf("deleting Mimir namespace: %w", err))
-	}
-
-	// Give it a moment for cleanup
-	time.Sleep(2 * time.Second)
-
-	_, _ = fmt.Fprintf(GinkgoWriter, "Mimir cleanup complete\n")
 }
