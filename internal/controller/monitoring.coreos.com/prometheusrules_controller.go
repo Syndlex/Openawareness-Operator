@@ -26,8 +26,9 @@ import (
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
 	"github.com/syndlex/openawareness-controller/internal/clients"
 	"github.com/syndlex/openawareness-controller/internal/controller/utils"
-	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -38,18 +39,30 @@ import (
 type PrometheusRulesReconciler struct {
 	RulerClients *clients.RulerClientCache
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// the PrometheusRules object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
+// Reconcile reconciles the PrometheusRule resource by syncing rule groups
+// to the configured Mimir instance. It handles the full lifecycle including creation,
+// updates, and deletion of rule groups with proper finalizer management.
+//
+// Note: Status management is not implemented for PrometheusRule resources because
+// the prometheus-operator v0.88.1 ConfigResourceStatus type does not include a
+// Conditions field. Status updates are only supported for custom CRDs (ClientConfig
+// and MimirAlertTenant) that define their own status structures.
+//
+// The reconciliation process:
+// 1. Fetches the PrometheusRule resource
+// 2. Retrieves the Mimir client from annotations
+// 3. Adds finalizer for cleanup on deletion
+// 4. Converts and pushes rule groups to Mimir API
+// 5. On deletion, removes rule groups from Mimir and cleans up finalizer
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
@@ -64,6 +77,8 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	alertManagerClient, err := r.clientFromAnnotation(logger, rule)
 	if err != nil {
+		r.Recorder.Event(rule, corev1.EventTypeWarning, "ClientNotFound",
+			fmt.Sprintf("No client configuration found: %v", err))
 		logger.V(1).Info("No Alertmanager client found. Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig", "name", rule.Name, "namespace", rule.Namespace)
 		return ctrl.Result{}, nil
 	}
@@ -82,19 +97,33 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		for _, group := range groups {
 			err := alertManagerClient.CreateRuleGroup(ctx, namespace, group)
 			if err != nil {
+				r.Recorder.Eventf(rule, corev1.EventTypeWarning, "RuleGroupCreateFailed",
+					"Failed to create rule group %s in namespace %s: %v", group.Name, namespace, err)
 				logger.Error(err, "Failed to create rule group", "group", group.Name, "namespace", namespace, "rule", rule.Name)
 				return ctrl.Result{}, err
 			}
 		}
 
+		r.Recorder.Eventf(rule, corev1.EventTypeNormal, "RuleGroupsSynced",
+			"Successfully synced %d rule group(s) to Mimir", len(groups))
+		logger.Info("Successfully synced all rule groups",
+			"name", rule.Name,
+			"namespace", rule.Namespace,
+			"groupCount", len(groups))
+
 	} else {
 		for _, group := range rule.Spec.Groups {
 			err := alertManagerClient.DeleteRuleGroup(ctx, namespace, group.Name)
 			if err != nil {
+				r.Recorder.Eventf(rule, corev1.EventTypeWarning, "RuleGroupDeleteFailed",
+					"Failed to delete rule group %s from namespace %s: %v", group.Name, namespace, err)
 				logger.Error(err, "Failed to delete rule group", "group", group.Name, "namespace", namespace, "rule", rule.Name)
 				return ctrl.Result{}, err
 			}
 		}
+
+		r.Recorder.Event(rule, corev1.EventTypeNormal, "RuleGroupsDeleted",
+			"Successfully deleted all rule groups from Mimir")
 
 		// The object is being deleted check for finalizer
 		if controllerutil.ContainsFinalizer(rule, utils.MyFinalizerName) {
@@ -113,7 +142,7 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
 	returnGroups := make([]rulefmt.RuleGroup, 0)
 	for _, group := range groups {
-		returnRules := make([]rulefmt.RuleNode, 0)
+		returnRules := make([]rulefmt.Rule, 0)
 		for _, rule := range group.Rules {
 			returnRules = append(returnRules, newRule(rule))
 		}
@@ -128,27 +157,17 @@ func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
 
 }
 
-// newRule converts a single PrometheusRule to a rulefmt.RuleNode.
+// newRule converts a single PrometheusRule to a rulefmt.Rule.
 // It handles both alert rules (with Alert field) and recording rules (with Record field).
-func newRule(rule monitoringv1.Rule) rulefmt.RuleNode {
-	if rule.Alert != "" {
-		return rulefmt.RuleNode{
-			Alert:         yaml.Node{Kind: yaml.ScalarNode, Value: rule.Alert},
-			Expr:          yaml.Node{Kind: yaml.ScalarNode, Value: rule.Expr.String()},
-			For:           0,
-			KeepFiringFor: 0,
-			Labels:        rule.Labels,
-			Annotations:   rule.Annotations,
-		}
-	} else {
-		return rulefmt.RuleNode{
-			Record:        yaml.Node{Kind: yaml.ScalarNode, Value: rule.Record},
-			Expr:          yaml.Node{Kind: yaml.ScalarNode, Value: rule.Expr.String()},
-			For:           0,
-			KeepFiringFor: 0,
-			Labels:        rule.Labels,
-			Annotations:   rule.Annotations,
-		}
+func newRule(rule monitoringv1.Rule) rulefmt.Rule {
+	return rulefmt.Rule{
+		Record:        rule.Record,
+		Alert:         rule.Alert,
+		Expr:          rule.Expr.String(),
+		For:           0,
+		KeepFiringFor: 0,
+		Labels:        rule.Labels,
+		Annotations:   rule.Annotations,
 	}
 }
 

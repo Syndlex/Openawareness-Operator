@@ -12,7 +12,8 @@ import (
 
 // MockRulerClientCache is a mock implementation of RulerClientCache for testing
 type MockRulerClientCache struct {
-	clients map[string]AwarenessClient
+	clients        map[string]AwarenessClient
+	getClientError error
 }
 
 // Ensure MockRulerClientCache implements RulerClientCacheInterface
@@ -81,20 +82,69 @@ func (m *MockRulerClientCache) RemoveClient(name string) {
 
 // GetClient retrieves a client from the cache
 func (m *MockRulerClientCache) GetClient(name string) (AwarenessClient, error) {
+	if m.getClientError != nil {
+		return nil, m.getClientError
+	}
 	if client, exists := m.clients[name]; exists {
 		return client, nil
 	}
 	return nil, errors.New("client not found")
 }
 
+// SetGetClientError sets an error to be returned by GetClient
+func (m *MockRulerClientCache) SetGetClientError(err error) {
+	m.getClientError = err
+}
+
+// SetClient manually sets a client in the cache for testing
+func (m *MockRulerClientCache) SetClient(name string, client AwarenessClient) {
+	m.clients[name] = client
+}
+
 // MockAwarenessClient is a mock implementation of AwarenessClient for testing
-type MockAwarenessClient struct{}
+type MockAwarenessClient struct {
+	createRuleGroupError   error
+	deleteRuleGroupError   error
+	createAlertConfigError error
+	deleteAlertConfigError error
+}
+
+// NewMockAwarenessClient creates a new mock awareness client
+func NewMockAwarenessClient() *MockAwarenessClient {
+	return &MockAwarenessClient{}
+}
+
+// SetCreateRuleGroupError sets an error to be returned by CreateRuleGroup
+func (m *MockAwarenessClient) SetCreateRuleGroupError(err error) {
+	m.createRuleGroupError = err
+}
+
+// SetDeleteRuleGroupError sets an error to be returned by DeleteRuleGroup
+func (m *MockAwarenessClient) SetDeleteRuleGroupError(err error) {
+	m.deleteRuleGroupError = err
+}
+
+// SetCreateAlertConfigError sets an error to be returned by CreateAlertmanagerConfig
+func (m *MockAwarenessClient) SetCreateAlertConfigError(err error) {
+	m.createAlertConfigError = err
+}
+
+// SetDeleteAlertConfigError sets an error to be returned by DeleteAlermanagerConfig
+func (m *MockAwarenessClient) SetDeleteAlertConfigError(err error) {
+	m.deleteAlertConfigError = err
+}
 
 func (m *MockAwarenessClient) CreateRuleGroup(ctx context.Context, namespace string, rg rulefmt.RuleGroup) error {
+	if m.createRuleGroupError != nil {
+		return m.createRuleGroupError
+	}
 	return nil
 }
 
 func (m *MockAwarenessClient) DeleteRuleGroup(ctx context.Context, namespace, groupName string) error {
+	if m.deleteRuleGroupError != nil {
+		return m.deleteRuleGroupError
+	}
 	return nil
 }
 
@@ -111,10 +161,16 @@ func (m *MockAwarenessClient) DeleteNamespace(ctx context.Context, namespace str
 }
 
 func (m *MockAwarenessClient) CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string) error {
+	if m.createAlertConfigError != nil {
+		return m.createAlertConfigError
+	}
 	return nil
 }
 
 func (m *MockAwarenessClient) DeleteAlermanagerConfig(ctx context.Context) error {
+	if m.deleteAlertConfigError != nil {
+		return m.deleteAlertConfigError
+	}
 	return nil
 }
 

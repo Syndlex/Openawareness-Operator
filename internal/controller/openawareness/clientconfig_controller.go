@@ -84,7 +84,6 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	{
 		// Attempt to create and validate client connection
 		spec := clientConfig.Spec
-		var err error
 
 		// Check if client already exists in cache - if so, remove it first to ensure refresh
 		// This handles cases where the client type, address, or tenant has changed

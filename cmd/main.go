@@ -163,6 +163,7 @@ func main() {
 		RulerClients: clientCache,
 		Client:       mgr.GetClient(),
 		Scheme:       mgr.GetScheme(),
+		Recorder:     mgr.GetEventRecorderFor("prometheusrules-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "PrometheusRules")
 		os.Exit(1)
