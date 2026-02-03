@@ -2,6 +2,8 @@
 
 A Kubernetes operator for managing Grafana Mimir Prometheus Rules and Alertmanager configurations in a multi-tenant environment.
 
+![openawareness-man-Mascot](Mascot.png)
+
 ## Description
 
 The OpenAwareness Controller provides Kubernetes-native management of:
