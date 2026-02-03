@@ -131,12 +131,34 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           CR_SKIP_EXISTING: true
 
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: --verbose --latest --strip header
+        env:
+          OUTPUT: CHANGELOG_BODY.md
+          GITHUB_REPO: ${{ github.repository }}
+
       - name: Generate release notes
         id: release_notes
         run: |
           VERSION=${{ steps.version.outputs.version }}
           cat > release_notes.md <<EOF
           ## OpenAwareness Controller ${VERSION}
+          
+          ### What's Changed
+          
+          EOF
+          
+          # Append the generated changelog
+          if [ -f CHANGELOG_BODY.md ]; then
+            cat CHANGELOG_BODY.md >> release_notes.md
+            echo "" >> release_notes.md
+          fi
+          
+          cat >> release_notes.md <<EOF
           
           ### Container Images
           
@@ -161,10 +183,6 @@ jobs:
           \`\`\`bash
           kubectl apply -f https://github.com/Syndlex/Openawareness-Operator/releases/download/v${VERSION}/install.yaml
           \`\`\`
-          
-          ### What's Changed
-          
-          See the [CHANGELOG](https://github.com/Syndlex/Openawareness-Operator/blob/main/CHANGELOG.md) for details.
           
           ### Documentation
           
