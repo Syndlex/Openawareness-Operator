@@ -72,18 +72,20 @@ const (
 )
 
 const (
-	// Configuration validation reasons
-	ReasonInvalidYAML     = "InvalidYAML"
+	// ReasonInvalidYAML Configuration validation invalid Yaml
+	ReasonInvalidYAML = "InvalidYAML"
+	// ReasonConfigValidated Configuration validation invalid config
 	ReasonConfigValidated = "ConfigValidated"
 
-	// Template-related reasons
-	ReasonInvalidTemplate      = "InvalidTemplate"
+	// ReasonInvalidTemplate Template not valid
+	ReasonInvalidTemplate = "InvalidTemplate"
+	// ReasonTemplateDataNotFound Template no data found
 	ReasonTemplateDataNotFound = "TemplateDataNotFound"
 
-	// API/network reasons (reusing from ClientConfig where possible)
+	// ReasonConflict API/network reasons (reusing from ClientConfig where possible)
 	ReasonConflict = "Conflict"
 
-	// Success reasons
+	// ReasonSynced Success reasons
 	ReasonSynced = "Synced"
 )
 
