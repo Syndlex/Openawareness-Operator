@@ -2,7 +2,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.1
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: mimiralerttenants.openawareness.syndlex
 spec:
   group: openawareness.syndlex
@@ -41,8 +41,37 @@ spec:
               alertmanagerConfig:
                 description: |-
                   AlertmanagerConfig contains the raw Alertmanager configuration in YAML format
+                  Supports Go text/template syntax with variables from SecretDataReferences
                   This should include global settings, routes, receivers, etc.
                 type: string
+              secretDataReferences:
+                description: |-
+                  SecretDataReferences lists ConfigMaps or Secrets containing template variables
+                  Data from these resources will be available in the alertmanagerConfig template
+                  Multiple references are merged; later references override earlier ones
+                items:
+                  description: SecretDataReference specifies a ConfigMap or Secret
+                    to use for template variables
+                  properties:
+                    kind:
+                      description: Kind specifies whether this is a ConfigMap or Secret
+                      enum:
+                      - ConfigMap
+                      - Secret
+                      type: string
+                    name:
+                      description: Name of the ConfigMap or Secret
+                      type: string
+                    optional:
+                      description: |-
+                        Optional flag to continue if this reference is not found
+                        Default: false (fail if not found)
+                      type: boolean
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
               templateFiles:
                 additionalProperties:
                   type: string

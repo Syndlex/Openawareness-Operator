@@ -1,19 +1,3 @@
-/*
-Copyright 2024 Syndlex.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package helper
 
 import (
@@ -160,11 +144,7 @@ func VerifyMimirRuleGroup(
 	namespace, groupName string,
 	timeout, interval time.Duration,
 ) error {
-	return verifyMimirRuleGroupCondition(
-		ctx, mimirClient, namespace, groupName, timeout, interval,
-		func(group *rulefmt.RuleGroup) bool { return true },
-		"Rule group '%s' should exist in Mimir namespace '%s'",
-	)
+	return verifyMimirRuleGroupCondition(ctx, mimirClient, namespace, groupName, timeout, interval, func(group *rulefmt.RuleGroup) bool { return true }, "Rule group '%s' should exist in Mimir namespace '%s'")
 }
 
 // VerifyMimirRuleGroupDeleted verifies that a rule group has been deleted from Mimir API.
@@ -206,24 +186,11 @@ func VerifyMimirRuleGroupContent(
 	expectedRuleCount int,
 	timeout, interval time.Duration,
 ) error {
-	return verifyMimirRuleGroupCondition(
-		ctx, mimirClient, namespace, groupName, timeout, interval,
-		func(group *rulefmt.RuleGroup) bool { return len(group.Rules) == expectedRuleCount },
-		"Rule group '%s' should have %d rules in Mimir namespace '%s'",
-		expectedRuleCount,
-	)
+	return verifyMimirRuleGroupCondition(ctx, mimirClient, namespace, groupName, timeout, interval, func(group *rulefmt.RuleGroup) bool { return len(group.Rules) == expectedRuleCount }, "Rule group '%s' should have %d rules in Mimir namespace '%s'")
 }
 
 // verifyMimirRuleGroupCondition is a helper that reduces duplication in Mimir verification functions.
-func verifyMimirRuleGroupCondition(
-	ctx context.Context,
-	mimirClient *mimir.Client,
-	namespace, groupName string,
-	timeout, interval time.Duration,
-	condition func(*rulefmt.RuleGroup) bool,
-	messageFormat string,
-	messageArgs ...interface{},
-) error {
+func verifyMimirRuleGroupCondition(ctx context.Context, mimirClient *mimir.Client, namespace, groupName string, timeout, interval time.Duration, condition func(*rulefmt.RuleGroup) bool, messageFormat string) error {
 	Eventually(func() bool {
 		ruleSet, err := mimirClient.ListRules(ctx, namespace)
 		if err != nil {

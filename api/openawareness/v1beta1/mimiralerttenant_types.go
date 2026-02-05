@@ -26,6 +26,23 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// SecretDataReference specifies a ConfigMap or Secret to use for template variables
+type SecretDataReference struct {
+	// Name of the ConfigMap or Secret
+	// +kubebuilder:validation:Required
+	Name string `json:"name"`
+
+	// Kind specifies whether this is a ConfigMap or Secret
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=ConfigMap;Secret
+	Kind string `json:"kind"`
+
+	// Optional flag to continue if this reference is not found
+	// Default: false (fail if not found)
+	// +optional
+	Optional bool `json:"optional,omitempty"`
+}
+
 // MimirAlertTenantSpec defines the desired state of MimirAlertTenant
 type MimirAlertTenantSpec struct {
 	// TemplateFiles contains Alertmanager notification templates
@@ -34,9 +51,16 @@ type MimirAlertTenantSpec struct {
 	TemplateFiles map[string]string `json:"templateFiles,omitempty"`
 
 	// AlertmanagerConfig contains the raw Alertmanager configuration in YAML format
+	// Supports Go text/template syntax with variables from SecretDataReferences
 	// This should include global settings, routes, receivers, etc.
 	// +kubebuilder:validation:Required
 	AlertmanagerConfig string `json:"alertmanagerConfig"`
+
+	// SecretDataReferences lists ConfigMaps or Secrets containing template variables
+	// Data from these resources will be available in the alertmanagerConfig template
+	// Multiple references are merged; later references override earlier ones
+	// +optional
+	SecretDataReferences []SecretDataReference `json:"secretDataReferences,omitempty"`
 }
 
 // Condition types for MimirAlertTenant
@@ -47,20 +71,14 @@ const (
 	ConditionTypeSynced = "Synced"
 )
 
-// Condition reasons for MimirAlertTenant
 const (
 	// Configuration validation reasons
-	ReasonInvalidYAML               = "InvalidYAML"
-	ReasonInvalidAlertmanagerConfig = "InvalidAlertmanagerConfig"
-	ReasonMissingTemplates          = "MissingTemplates"
-	ReasonInvalidTemplateFormat     = "InvalidTemplateFormat"
-	ReasonConfigValidated           = "ConfigValidated"
+	ReasonInvalidYAML     = "InvalidYAML"
+	ReasonConfigValidated = "ConfigValidated"
 
-	// Resource/annotation reasons
-	ReasonMissingAnnotations = "MissingAnnotations"
-	ReasonMissingClientName  = "MissingClientName"
-	ReasonClientNotFound     = "ClientNotFound"
-	ReasonClientNotReady     = "ClientNotReady"
+	// Template-related reasons
+	ReasonInvalidTemplate      = "InvalidTemplate"
+	ReasonTemplateDataNotFound = "TemplateDataNotFound"
 
 	// API/network reasons (reusing from ClientConfig where possible)
 	ReasonConflict = "Conflict"
@@ -144,6 +162,22 @@ func (tenant *MimirAlertTenant) ValidateAlertmanagerConfig() error {
 	var config interface{}
 	if err := yaml.Unmarshal([]byte(tenant.Spec.AlertmanagerConfig), &config); err != nil {
 		return fmt.Errorf("invalid YAML in alertmanagerConfig: %w", err)
+	}
+
+	return nil
+}
+
+// ValidateRenderedConfig validates a rendered alertmanager configuration string.
+// This is used after template rendering to validate the final YAML before sending to Mimir.
+func (tenant *MimirAlertTenant) ValidateRenderedConfig(renderedConfig string) error {
+	if renderedConfig == "" {
+		return fmt.Errorf("rendered alertmanagerConfig is empty")
+	}
+
+	// Try to unmarshal to ensure it's valid YAML
+	var config interface{}
+	if err := yaml.Unmarshal([]byte(renderedConfig), &config); err != nil {
+		return fmt.Errorf("invalid YAML in rendered alertmanagerConfig: %w", err)
 	}
 
 	return nil

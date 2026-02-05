@@ -249,6 +249,72 @@ The MimirAlertTenant CRD supports:
 
 See the [Grafana Mimir Alertmanager API documentation](https://grafana.com/docs/mimir/latest/references/http-api/#set-alertmanager-configuration) for detailed configuration options.
 
+### Environment Variable Templating
+
+#### Why Use Templating?
+
+- **Separate configuration from secrets**: Keep sensitive data (API keys, webhook URLs) in Secrets
+- **Environment-specific configs**: Use different values for dev/staging/prod
+- **Shared configuration**: Reuse common settings across multiple alert tenants
+- **GitOps-friendly**: Store configuration templates in Git, secrets elsewhere !! Do not use Git to store you Credentials here!
+
+#### Quick Example
+
+```yaml
+apiVersion: openawareness.syndlex/v1beta1
+kind: MimirAlertTenant
+metadata:
+  name: devops-alerts
+  annotations:
+    openawareness.io/client-name: "mimir-client"
+    openawareness.io/mimir-tenant: "devops-team"
+spec:
+  # Reference ConfigMaps and Secrets for template variables
+  secretDataReferences:
+    - name: alert-smtp-config
+      kind: ConfigMap
+    - name: alert-webhooks
+      kind: Secret
+      optional: true
+  
+  # Use Go template syntax with [[ ]] delimiters to inject values
+  # Note: Alertmanager's own {{ }} templates are preserved
+  alertmanagerConfig: |
+    global:
+      smtp_smarthost: '[[ .SMTP_HOST ]]'
+      smtp_from: '[[ .SMTP_FROM ]]'
+    
+    receivers:
+      - name: 'critical'
+        email_configs:
+          - to: '[[ .ONCALL_EMAIL ]]'
+        [[- if .SLACK_WEBHOOK_URL ]]
+        slack_configs:
+          - api_url: '[[ .SLACK_WEBHOOK_URL ]]'
+          # Alertmanager templates use {{ }}
+          text: 'Alert: {{ .GroupLabels.alertname }}'
+        [[- end ]]
+```
+
+#### Template Features
+
+- **Variable substitution**: `[[ .VARIABLE_NAME ]]` (uses `[[ ]]` to avoid conflicts with Alertmanager templates or helm)
+- **Default values**: `[[ .VAR | default "fallback" ]]`
+- **Conditional sections**: `[[- if .VAR ]]...[[- end ]]`
+- **Multiple data sources**: Reference multiple ConfigMaps and Secrets
+- **Optional references**: Mark references as optional to avoid failures
+- **Alertmanager templates preserved**: Native Alertmanager `{{ }}` templates are passed through unchanged
+
+#### Examples
+
+See the [examples/templating](examples/templating) directory for complete examples:
+- Basic ConfigMap templating
+- Using Secrets for sensitive data
+- Environment-specific configurations
+- Conditional receiver configurations
+
+For detailed documentation, see [examples/templating/README.md](examples/templating/README.md).
+
 ## Development
 
 ### Running Tests

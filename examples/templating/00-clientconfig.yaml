@@ -1,0 +1,14 @@
+---
+# ClientConfig for connecting to Grafana Mimir
+# This is required for MimirAlertTenant resources to sync configurations
+apiVersion: openawareness.syndlex/v1beta1
+kind: ClientConfig
+metadata:
+  name: template-mimir
+  namespace: default
+  annotations:
+    openawareness.io/mimir-tenant: "devops-team"
+spec:
+  address: "http://mimir-gateway.mimir.svc.cluster.local:80"
+  type: Mimir
+  

@@ -1,19 +1,3 @@
-/*
-Copyright 2024 Syndlex.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package openawareness
 
 import (
@@ -23,6 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/syndlex/openawareness-controller/internal/clients"
 	"github.com/syndlex/openawareness-controller/internal/controller/utils"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8sClient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,6 +28,8 @@ type MimirAlertTenantReconciler struct {
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=openawareness.syndlex,resources=mimiralerttenants/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch
 
 // Reconcile reconciles the MimirAlertTenant resource by syncing Alertmanager configurations
 // to the configured Mimir instance. It handles the full lifecycle including creation,
@@ -87,9 +74,47 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, err
 		}
 
-		// Validate the Alertmanager configuration before sending to Mimir
-		if err := rule.ValidateAlertmanagerConfig(); err != nil {
-			logger.Error(err, "Invalid Alertmanager configuration",
+		// Template rendering must happen BEFORE validation
+		// Get template data and render config if references are provided
+		var renderedConfig string
+		if len(rule.Spec.SecretDataReferences) > 0 {
+			templateData, err := r.getSecretData(ctx, logger, rule)
+			if err != nil {
+				logger.Error(err, "Failed to get template data",
+					"name", rule.Name,
+					"namespace", rule.Namespace)
+				rule.SetConfigInvalidCondition(openawarenessv1beta1.ReasonTemplateDataNotFound, err.Error())
+				if updateErr := r.Status().Update(ctx, rule); updateErr != nil {
+					logger.Error(updateErr, "Failed to update status")
+				}
+				return ctrl.Result{}, err
+			}
+
+			// Render the alertmanagerConfig with template data
+			renderedConfig, err = utils.RenderTemplate(rule.Spec.AlertmanagerConfig, templateData)
+			if err != nil {
+				logger.Error(err, "Failed to render template",
+					"name", rule.Name,
+					"namespace", rule.Namespace)
+				rule.SetConfigInvalidCondition(openawarenessv1beta1.ReasonInvalidTemplate, err.Error())
+				if updateErr := r.Status().Update(ctx, rule); updateErr != nil {
+					logger.Error(updateErr, "Failed to update status")
+				}
+				return ctrl.Result{}, err
+			}
+
+			logger.V(1).Info("Template rendered successfully",
+				"name", rule.Name,
+				"templateVars", len(templateData))
+		} else {
+			// No templating needed
+			renderedConfig = rule.ToConfigDTO()
+		}
+
+		// Validate the rendered Alertmanager configuration before sending to Mimir
+		// We need to create a temporary copy with the rendered config for validation
+		if err := rule.ValidateRenderedConfig(renderedConfig); err != nil {
+			logger.Error(err, "Invalid Alertmanager configuration after rendering",
 				"name", rule.Name,
 				"namespace", rule.Namespace)
 			rule.SetConfigInvalidCondition(openawarenessv1beta1.ReasonInvalidYAML, err.Error())
@@ -100,10 +125,9 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, err
 		}
 
-		cfg := rule.ToConfigDTO()
 		templates := rule.ToTemplatesDTO()
 
-		err = alertManagerClient.CreateAlertmanagerConfig(ctx, cfg, templates)
+		err = alertManagerClient.CreateAlertmanagerConfig(ctx, renderedConfig, templates)
 		if err != nil {
 			logger.Error(err, "Failed to create Alertmanager configuration",
 				"name", rule.Name,
@@ -234,6 +258,75 @@ func (r *MimirAlertTenantReconciler) clientFromCrd(
 		"address", clientConfig.Spec.Address)
 
 	return alertManagerClient, nil
+}
+
+// getSecretData fetches and merges data from all SecretDataReferences.
+// Returns a map of key-value pairs for templating.
+// Later references override earlier ones in case of key conflicts.
+// Returns error if a required (non-optional) reference is not found.
+func (r *MimirAlertTenantReconciler) getSecretData(
+	ctx context.Context,
+	logger logr.Logger,
+	tenant *openawarenessv1beta1.MimirAlertTenant,
+) (map[string]string, error) {
+	data := make(map[string]string)
+
+	for _, ref := range tenant.Spec.SecretDataReferences {
+		refData, err := r.fetchReferenceData(ctx, tenant.Namespace, ref)
+		if err != nil {
+			if ref.Optional {
+				logger.Info("Optional reference not found, skipping",
+					"kind", ref.Kind,
+					"name", ref.Name)
+				continue
+			}
+			return nil, fmt.Errorf("failed to get %s %s: %w", ref.Kind, ref.Name, err)
+		}
+
+		// Merge data (later refs override earlier ones)
+		for k, v := range refData {
+			data[k] = v
+		}
+	}
+
+	return data, nil
+}
+
+// fetchReferenceData retrieves data from a single ConfigMap or Secret
+func (r *MimirAlertTenantReconciler) fetchReferenceData(
+	ctx context.Context,
+	namespace string,
+	ref openawarenessv1beta1.SecretDataReference,
+) (map[string]string, error) {
+	switch ref.Kind {
+	case "ConfigMap":
+		cm := &corev1.ConfigMap{}
+		if err := r.Get(ctx, k8sClient.ObjectKey{
+			Name:      ref.Name,
+			Namespace: namespace,
+		}, cm); err != nil {
+			return nil, err
+		}
+		return cm.Data, nil
+
+	case "Secret":
+		secret := &corev1.Secret{}
+		if err := r.Get(ctx, k8sClient.ObjectKey{
+			Name:      ref.Name,
+			Namespace: namespace,
+		}, secret); err != nil {
+			return nil, err
+		}
+		// Convert []byte to string
+		data := make(map[string]string, len(secret.Data))
+		for k, v := range secret.Data {
+			data[k] = string(v)
+		}
+		return data, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported reference kind: %s", ref.Kind)
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

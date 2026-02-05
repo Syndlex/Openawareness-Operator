@@ -1,19 +1,3 @@
-/*
-Copyright 2024 Syndlex.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package helper
 
 import (
@@ -52,23 +36,6 @@ func CreateClientConfig(
 	if err := k8sClient.Create(ctx, clientConfig); err != nil {
 		return nil, err
 	}
-
-	return clientConfig, nil
-}
-
-// WaitForClientConfigCreation waits for a ClientConfig to be created and returns it.
-func WaitForClientConfigCreation(
-	ctx context.Context,
-	k8sClient client.Client,
-	name, namespace string,
-	timeout, interval time.Duration,
-) (*openawarenessv1beta1.ClientConfig, error) {
-	clientConfig := &openawarenessv1beta1.ClientConfig{}
-	namespacedName := types.NamespacedName{Name: name, Namespace: namespace}
-
-	Eventually(func() error {
-		return k8sClient.Get(ctx, namespacedName, clientConfig)
-	}, timeout, interval).Should(Succeed(), "ClientConfig should be created")
 
 	return clientConfig, nil
 }
@@ -132,24 +99,6 @@ func WaitForConditionsSet(
 	}, timeout, interval).Should(BeTrue(), "Conditions should be set")
 
 	return clientConfig, nil
-}
-
-// WaitForClientConfigDeleted waits for a ClientConfig to be fully deleted from Kubernetes.
-func WaitForClientConfigDeleted(
-	ctx context.Context,
-	k8sClient client.Client,
-	name, namespace string,
-	timeout, interval time.Duration,
-) error {
-	clientConfig := &openawarenessv1beta1.ClientConfig{}
-	namespacedName := types.NamespacedName{Name: name, Namespace: namespace}
-
-	Eventually(func() bool {
-		err := k8sClient.Get(ctx, namespacedName, clientConfig)
-		return err != nil && client.IgnoreNotFound(err) == nil
-	}, timeout, interval).Should(BeTrue(), "ClientConfig should be fully deleted")
-
-	return nil
 }
 
 // UpdateClientConfigAddress updates the address of a ClientConfig.
