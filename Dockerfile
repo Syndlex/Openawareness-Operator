@@ -25,9 +25,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o ma
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
+# The nonroot image already includes a nonroot user with UID 65532
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/manager .
+COPY --from=builder --chown=65532:65532 /workspace/manager .
 USER 65532:65532
 
 ENTRYPOINT ["/manager"]
