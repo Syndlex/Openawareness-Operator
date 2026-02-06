@@ -10,7 +10,7 @@ controllerManager:
         drop:
         - ALL
     image:
-      repository: localhost:32000/openawareness-controller
+      repository: ghcr.io/syndlex/charts/openawareness-controller
     resources:
       limits:
         cpu: 500m
