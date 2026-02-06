@@ -2,6 +2,32 @@ apiVersion: v1
 entries:
   openawareness-controller:
   - apiVersion: v2
+    appVersion: 0.2.2
+    created: "2026-02-06T15:48:24.42521183Z"
+    description: A Kubernetes operator for managing Grafana Mimir Prometheus Rules
+      and Alertmanager configurations in a multi-tenant environment
+    digest: 93a8cf4ee4428e24570a83f83d64364748b877d2483d76bf08713f32c82ef045
+    home: https://github.com/Syndlex/Openawareness-Operator
+    keywords:
+    - kubernetes
+    - operator
+    - prometheus
+    - grafana
+    - mimir
+    - alertmanager
+    - monitoring
+    - devops
+    maintainers:
+    - name: Syndlex
+      url: https://github.com/Syndlex
+    name: openawareness-controller
+    sources:
+    - https://github.com/Syndlex/Openawareness-Operator
+    type: application
+    urls:
+    - https://github.com/Syndlex/Openawareness-Operator/releases/download/openawareness-controller-0.2.2/openawareness-controller-0.2.2.tgz
+    version: 0.2.2
+  - apiVersion: v2
     appVersion: 0.2.1
     created: "2026-02-05T11:32:55.438181581Z"
     description: A Kubernetes operator for managing Grafana Mimir Prometheus Rules
@@ -53,4 +79,4 @@ entries:
     urls:
     - https://github.com/Syndlex/Openawareness-Operator/releases/download/openawareness-controller-0.1.0/openawareness-controller-0.1.0.tgz
     version: 0.1.0
-generated: "2026-02-05T11:32:55.438189767Z"
+generated: "2026-02-06T15:48:24.425226979Z"
