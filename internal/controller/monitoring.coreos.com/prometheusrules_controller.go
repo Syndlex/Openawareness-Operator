@@ -4,6 +4,7 @@ package monitoringcoreoscom
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -13,11 +14,14 @@ import (
 	"github.com/syndlex/openawareness-controller/internal/controller/utils"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // PrometheusRulesReconciler reconciles a PrometheusRules object
@@ -32,6 +36,7 @@ type PrometheusRulesReconciler struct {
 //nolint:lll
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=monitoring.coreos.com,resources=prometheusrules/finalizers,verbs=update
+// +kubebuilder:rbac:groups=openawareness.syndlex,resources=clientconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Reconcile reconciles the PrometheusRule resource by syncing rule groups
@@ -65,12 +70,14 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err != nil {
 		r.Recorder.Event(rule, corev1.EventTypeWarning, "ClientNotFound",
 			fmt.Sprintf("No client configuration found: %v", err))
-		logger.V(1).Info(
-			"No Alertmanager client found. Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig",
+		logger.Info(
+			"Client not found, will retry in 5 seconds. Please create a new "+openawarenessv1beta1.GroupVersion.Group+" ClientConfig",
 			"name", rule.Name,
 			"namespace", rule.Namespace,
+			"error", err.Error(),
 		)
-		return ctrl.Result{}, nil
+		// Requeue to retry when client becomes available
+		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
 	namespace := r.getNamespaceFromAnnotations(logger, rule)
@@ -242,5 +249,54 @@ func (r *PrometheusRulesReconciler) getNamespaceFromAnnotations(
 func (r *PrometheusRulesReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&monitoringv1.PrometheusRule{}).
+		Watches(
+			&openawarenessv1beta1.ClientConfig{},
+			handler.EnqueueRequestsFromMapFunc(r.findPrometheusRulesForClient),
+		).
 		Complete(r)
+}
+
+// findPrometheusRulesForClient maps ClientConfig changes to PrometheusRule reconciliation requests.
+// When a ClientConfig is created, updated, or deleted, this function finds all PrometheusRules
+// that reference it and triggers their reconciliation.
+func (r *PrometheusRulesReconciler) findPrometheusRulesForClient(ctx context.Context, client client.Object) []reconcile.Request {
+	logger := log.FromContext(ctx)
+
+	clientConfig, ok := client.(*openawarenessv1beta1.ClientConfig)
+	if !ok {
+		logger.Error(fmt.Errorf("expected ClientConfig but got %T", client), "Unexpected object type in watch handler")
+		return nil
+	}
+
+	// List all PrometheusRules
+	rulesList := &monitoringv1.PrometheusRuleList{}
+	if err := r.List(ctx, rulesList); err != nil {
+		logger.Error(err, "Failed to list PrometheusRules for ClientConfig watch")
+		return nil
+	}
+
+	var requests []reconcile.Request
+	for _, rule := range rulesList.Items {
+		// Check if this rule references the ClientConfig
+		if rule.Annotations != nil {
+			if clientName, exists := rule.Annotations[utils.ClientNameAnnotation]; exists && clientName == clientConfig.Name {
+				requests = append(requests, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      rule.Name,
+						Namespace: rule.Namespace,
+					},
+				})
+				logger.V(1).Info("Queueing PrometheusRule reconciliation due to ClientConfig change",
+					"prometheusRule", rule.Name,
+					"namespace", rule.Namespace,
+					"clientConfig", clientConfig.Name)
+			}
+		}
+	}
+
+	logger.V(1).Info("Found PrometheusRules referencing ClientConfig",
+		"clientConfig", clientConfig.Name,
+		"count", len(requests))
+
+	return requests
 }

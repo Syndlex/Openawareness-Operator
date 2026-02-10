@@ -3,6 +3,8 @@
 package e2e
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -343,6 +345,104 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(k8sClient.Delete(ctx, prometheusRule)).To(Succeed())
 			err = helper.WaitForPrometheusRuleDeleted(ctx, k8sClient, ruleName, testNamespace, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Context("When PrometheusRule is created before ClientConfig exists", func() {
+		const (
+			ruleName         = "rule-before-client"
+			clientConfigName = "delayed-client"
+		)
+
+		It("Should retry and eventually sync when ClientConfig is created", func() {
+			By("Creating PrometheusRule FIRST (before ClientConfig exists)")
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name: "retry-test-group",
+					Rules: []monitoringv1.Rule{
+						{
+							Alert: "RetryTestAlert",
+							Expr:  intstr.FromString("up == 0"),
+							Labels: map[string]string{
+								"severity": "warning",
+							},
+						},
+					},
+				},
+			}
+
+			prometheusRule, err := helper.CreatePrometheusRule(
+				ctx, k8sClient,
+				ruleName, testNamespace,
+				clientConfigName, tenant, // References non-existent client
+				groups,
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for PrometheusRule to be created")
+			_, err = helper.WaitForPrometheusRuleCreation(ctx, k8sClient, ruleName, testNamespace, timeout, interval)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying PrometheusRule does NOT have finalizer yet (client not found)")
+			Consistently(func() bool {
+				rule := &monitoringv1.PrometheusRule{}
+				if err := k8sClient.Get(ctx, types.NamespacedName{
+					Name:      ruleName,
+					Namespace: testNamespace,
+				}, rule); err != nil {
+					return false
+				}
+				for _, finalizer := range rule.GetFinalizers() {
+					if finalizer == utils.FinalizerAnnotation {
+						return true
+					}
+				}
+				return false
+			}, time.Second*3, interval).Should(BeFalse(), "Finalizer should NOT be added when client doesn't exist")
+
+			By("Now creating the ClientConfig")
+			_, err = helper.CreateClientConfig(
+				ctx, k8sClient,
+				clientConfigName, testNamespace,
+				MimirGatewayAddress,
+				openawarenessv1beta1.Mimir,
+				map[string]string{
+					utils.MimirTenantAnnotation: tenant,
+				},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for ClientConfig to be reconciled")
+			err = helper.WaitForClientConfigFinalizerAdded(ctx, k8sClient, clientConfigName, testNamespace, timeout, interval)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Waiting for PrometheusRule to eventually get finalizer (after retry)")
+			err = helper.WaitForPrometheusRuleFinalizerAdded(ctx, k8sClient, ruleName, testNamespace, timeout, interval)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Verifying rule group was synced to Mimir")
+			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, tenant)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "retry-test-group", timeout, interval)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, "retry-test-group", 1, timeout, interval)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Cleaning up")
+			Expect(k8sClient.Delete(ctx, prometheusRule)).To(Succeed())
+			err = helper.WaitForPrometheusRuleDeleted(ctx, k8sClient, ruleName, testNamespace, timeout, interval)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Cleaning up ClientConfig")
+			clientConfig := &openawarenessv1beta1.ClientConfig{}
+			err = k8sClient.Get(ctx, types.NamespacedName{
+				Name:      clientConfigName,
+				Namespace: testNamespace,
+			}, clientConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(k8sClient.Delete(ctx, clientConfig)).To(Succeed())
 		})
 	})
 
