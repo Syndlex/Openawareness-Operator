@@ -113,20 +113,20 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying rule groups in Mimir API")
-			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, tenant)
+			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "test-alerts", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "test-alerts", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "test-recordings", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "test-recordings", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying rule group content")
-			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, "test-alerts", 1, timeout, interval)
+			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, testNamespace, "test-alerts", 1, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, "test-recordings", 1, timeout, interval)
+			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, testNamespace, "test-recordings", 1, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleaning up")
@@ -137,10 +137,10 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying rule groups were deleted from Mimir")
-			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, "test-alerts", timeout, interval)
+			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, testNamespace, "test-alerts", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, "test-recordings", timeout, interval)
+			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, testNamespace, "test-recordings", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -305,10 +305,10 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			err = helper.WaitForPrometheusRuleFinalizerAdded(ctx, k8sClient, ruleName, testNamespace, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, tenant)
+			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "initial-group", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "initial-group", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Updating PrometheusRule with new rules")
@@ -338,7 +338,7 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying updated rules in Mimir")
-			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, "initial-group", 2, timeout, interval)
+			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, testNamespace, "initial-group", 2, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleaning up")
@@ -421,13 +421,13 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying rule group was synced to Mimir")
-			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, tenant)
+			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "retry-test-group", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "retry-test-group", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, "retry-test-group", 1, timeout, interval)
+			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, testNamespace, "retry-test-group", 1, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleaning up")
@@ -507,13 +507,13 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying both rule groups exist in Mimir")
-			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, tenant)
+			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "alerts-1", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "alerts-1", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "alerts-2", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "alerts-2", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleaning up first rule")
@@ -522,11 +522,11 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying first rule group was deleted")
-			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, "alerts-1", timeout, interval)
+			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, testNamespace, "alerts-1", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying second rule group still exists")
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "alerts-2", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "alerts-2", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleaning up second rule")
@@ -535,7 +535,7 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying second rule group was deleted")
-			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, "alerts-2", timeout, interval)
+			err = helper.VerifyMimirRuleGroupDeleted(ctx, mimirClient, tenant, testNamespace, "alerts-2", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})
@@ -604,19 +604,19 @@ var _ = Describe("PrometheusRule E2E", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying rule groups in Mimir")
-			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, tenant)
+			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "complex-alerts", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "complex-alerts", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, "complex-alerts", 2, timeout, interval)
+			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, testNamespace, "complex-alerts", 2, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, "recording-rules", timeout, interval)
+			err = helper.VerifyMimirRuleGroup(ctx, mimirClient, tenant, testNamespace, "recording-rules", timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
-			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, "recording-rules", 2, timeout, interval)
+			err = helper.VerifyMimirRuleGroupContent(ctx, mimirClient, tenant, testNamespace, "recording-rules", 2, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleaning up")

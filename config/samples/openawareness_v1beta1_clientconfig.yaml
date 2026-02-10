@@ -1,11 +1,11 @@
 apiVersion: openawareness.syndlex/v1beta1
 kind: ClientConfig
 metadata:
+  name: clientconfig-sample
   labels:
     app.kubernetes.io/name: openawareness-controller
+    app.kubernetes.io/component: client-config
     app.kubernetes.io/managed-by: kustomize
-  name: clientconfig-sample
 spec:
-  address: "http://localhost:8080"
-#  address: "http://mimir-nginx.mimir-test.svc:80"
-  type: mimir
+ address: "http://localhost:8080"
+ type: mimir

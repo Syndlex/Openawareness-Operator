@@ -66,7 +66,7 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 	logger.Info("Found Rule", "name", rule.Name, "namespace", rule.Namespace)
 
-	alertManagerClient, err := r.clientFromAnnotation(logger, rule)
+	alertManagerClient, err := r.clientFromAnnotation(ctx, logger, rule)
 	if err != nil {
 		r.Recorder.Event(rule, corev1.EventTypeWarning, "ClientNotFound",
 			fmt.Sprintf("No client configuration found: %v", err))
@@ -80,7 +80,7 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
-	namespace := r.getNamespaceFromAnnotations(logger, rule)
+	tenantID := r.getNamespaceFromAnnotations(logger, rule)
 
 	if rule.DeletionTimestamp.IsZero() {
 		// Register finalizer
@@ -92,11 +92,11 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		groups := convert(rule.Spec.Groups)
 		for _, group := range groups {
-			err := alertManagerClient.CreateRuleGroup(ctx, namespace, group)
+			err := alertManagerClient.CreateRuleGroup(ctx, rule.Namespace, group, tenantID)
 			if err != nil {
 				r.Recorder.Eventf(rule, corev1.EventTypeWarning, "RuleGroupCreateFailed",
-					"Failed to create rule group %s in namespace %s: %v", group.Name, namespace, err)
-				logger.Error(err, "Failed to create rule group", "group", group.Name, "namespace", namespace, "rule", rule.Name)
+					"Failed to create rule group %s in namespace %s for tenant %s: %v", group.Name, rule.Namespace, tenantID, err)
+				logger.Error(err, "Failed to create rule group", "group", group.Name, "namespace", rule.Namespace, "tenantID", tenantID)
 				return ctrl.Result{}, err
 			}
 		}
@@ -110,11 +110,11 @@ func (r *PrometheusRulesReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	} else {
 		for _, group := range rule.Spec.Groups {
-			err := alertManagerClient.DeleteRuleGroup(ctx, namespace, group.Name)
+			err := alertManagerClient.DeleteRuleGroup(ctx, rule.Namespace, group.Name, tenantID)
 			if err != nil {
 				r.Recorder.Eventf(rule, corev1.EventTypeWarning, "RuleGroupDeleteFailed",
-					"Failed to delete rule group %s from namespace %s: %v", group.Name, namespace, err)
-				logger.Error(err, "Failed to delete rule group", "group", group.Name, "namespace", namespace, "rule", rule.Name)
+					"Failed to delete rule group %s from namespace %s for tenant %s: %v", group.Name, rule.Namespace, tenantID, err)
+				logger.Error(err, "Failed to delete rule group", "group", group.Name, "namespace", rule.Namespace, "tenantID", tenantID)
 				return ctrl.Result{}, err
 			}
 		}
@@ -169,9 +169,10 @@ func newRule(rule monitoringv1.Rule) rulefmt.Rule {
 }
 
 // clientFromAnnotation retrieves the appropriate Mimir client for the given PrometheusRule.
-// It extracts the client name from the resource's annotations and returns the cached client.
+// It extracts the client name and tenant ID from the resource's annotations and returns the cached client.
 // Returns an error if the annotation is missing or if the client is not found in the cache.
 func (r *PrometheusRulesReconciler) clientFromAnnotation(
+	ctx context.Context,
 	logger logr.Logger,
 	rule *monitoringv1.PrometheusRule,
 ) (clients.AwarenessClient, error) {
@@ -206,7 +207,9 @@ func (r *PrometheusRulesReconciler) clientFromAnnotation(
 		)
 	}
 
-	alertManagerClient, err := r.RulerClients.GetClient(clientName)
+	// Get or create client - uses simple cache key (clientName only)
+	// via the namespace parameter in Mimir client methods
+	alertManagerClient, err := r.RulerClients.GetOrCreateMimirClient(ctx, "", clientName)
 	if err != nil {
 		logger.Info(
 			"Client does not exist in cache",

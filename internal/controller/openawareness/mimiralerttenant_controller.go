@@ -127,11 +127,18 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 		templates := rule.ToTemplatesDTO()
 
-		err = alertManagerClient.CreateAlertmanagerConfig(ctx, renderedConfig, templates)
+		// Get tenant ID from annotations for the API call
+		tenantID := rule.GetAnnotations()[utils.MimirTenantAnnotation]
+		if tenantID == "" {
+			tenantID = utils.DefaultTenantID
+		}
+
+		err = alertManagerClient.CreateAlertmanagerConfig(ctx, renderedConfig, templates, tenantID)
 		if err != nil {
 			logger.Error(err, "Failed to create Alertmanager configuration",
 				"name", rule.Name,
-				"namespace", rule.Namespace)
+				"namespace", rule.Namespace,
+				"tenantID", tenantID)
 
 			// Categorize the error and set appropriate status using shared utility
 			reason, _ := utils.CategorizeError(err)
@@ -174,18 +181,26 @@ func (r *MimirAlertTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{}, nil
 		}
 
-		err = alertManagerClient.DeleteAlermanagerConfig(ctx)
+		// Get tenant ID from annotations for the API call
+		tenantID := rule.GetAnnotations()[utils.MimirTenantAnnotation]
+		if tenantID == "" {
+			tenantID = utils.DefaultTenantID
+		}
+
+		err = alertManagerClient.DeleteAlermanagerConfig(ctx, tenantID)
 		if err != nil {
 			logger.Error(err, "Failed to delete Alertmanager configuration - configuration may be orphaned in Mimir",
 				"name", rule.Name,
 				"namespace", rule.Namespace,
+				"tenantID", tenantID,
 				"warning", "Alertmanager configuration may still exist in Mimir API")
 			// Continue with finalizer removal even if deletion fails to prevent resource from being stuck.
 			// This may leave orphaned configuration in Mimir. Operators should manually clean up if needed.
 		} else {
 			logger.Info("Successfully deleted Alertmanager configuration from Mimir",
 				"name", rule.Name,
-				"namespace", rule.Namespace)
+				"namespace", rule.Namespace,
+				"tenantID", tenantID)
 		}
 
 		// Remove finalizer
@@ -242,7 +257,6 @@ func (r *MimirAlertTenantReconciler) clientFromCrd(
 		ctx,
 		clientConfig.Spec.Address,
 		clientName,
-		tenantID,
 	)
 	if err != nil {
 		logger.Error(err, "Failed to get or create Mimir client",

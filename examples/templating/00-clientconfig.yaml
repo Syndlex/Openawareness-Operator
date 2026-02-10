@@ -6,9 +6,9 @@ kind: ClientConfig
 metadata:
   name: template-mimir
   namespace: default
-  annotations:
-    openawareness.io/mimir-tenant: "devops-team"
+  labels:
+    app.kubernetes.io/name: openawareness-controller
+    app.kubernetes.io/component: client-config
 spec:
   address: "http://mimir-gateway.mimir.svc.cluster.local:80"
-  type: Mimir
-  
+  type: mimir

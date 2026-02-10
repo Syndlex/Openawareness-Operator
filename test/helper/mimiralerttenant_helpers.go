@@ -222,10 +222,9 @@ func VerifyFailedSync(alertTenant *openawarenessv1beta1.MimirAlertTenant) {
 }
 
 // CreateMimirClient creates a Mimir client for testing API verification.
-func CreateMimirClient(ctx context.Context, address, tenant string) (*mimir.Client, error) {
+func CreateMimirClient(ctx context.Context, address string) (*mimir.Client, error) {
 	cfg := mimir.Config{
-		Address:  address,
-		TenantID: tenant,
+		Address: address,
 	}
 	return mimir.New(ctx, cfg)
 }
@@ -235,11 +234,12 @@ func CreateMimirClient(ctx context.Context, address, tenant string) (*mimir.Clie
 func VerifyMimirAPIConfig(
 	ctx context.Context,
 	mimirClient *mimir.Client,
+	tenantID string,
 	expectedReceiver string,
 	timeout, interval time.Duration,
 ) error {
 	Eventually(func() error {
-		config, _, err := mimirClient.GetAlertmanagerConfig(ctx)
+		config, _, err := mimirClient.GetAlertmanagerConfig(ctx, tenantID)
 		if err != nil {
 			return fmt.Errorf("failed to get config from Mimir: %w", err)
 		}
@@ -258,11 +258,12 @@ func VerifyMimirAPIConfig(
 func VerifyMimirAPITemplate(
 	ctx context.Context,
 	mimirClient *mimir.Client,
+	tenantID string,
 	templateName string,
 	timeout, interval time.Duration,
 ) error {
 	Eventually(func() error {
-		_, templates, err := mimirClient.GetAlertmanagerConfig(ctx)
+		_, templates, err := mimirClient.GetAlertmanagerConfig(ctx, tenantID)
 		if err != nil {
 			return fmt.Errorf("failed to get templates from Mimir: %w", err)
 		}
@@ -282,10 +283,11 @@ func VerifyMimirAPITemplate(
 func VerifyMimirAPIConfigDeleted(
 	ctx context.Context,
 	mimirClient *mimir.Client,
+	tenantID string,
 	timeout, interval time.Duration,
 ) error {
 	Eventually(func() bool {
-		config, templates, err := mimirClient.GetAlertmanagerConfig(ctx)
+		config, templates, err := mimirClient.GetAlertmanagerConfig(ctx, tenantID)
 		if err != nil {
 			// Unexpected error
 			return false

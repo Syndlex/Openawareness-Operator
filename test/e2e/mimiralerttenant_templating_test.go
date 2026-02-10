@@ -176,11 +176,11 @@ receivers:
 				helper.VerifySuccessfulSync(updatedTenant)
 
 				By("Verifying configuration in Mimir API contains rendered values")
-				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, mimirNamespace)
+				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() bool {
-					config, _, err := mimirClient.GetAlertmanagerConfig(ctx)
+					config, _, err := mimirClient.GetAlertmanagerConfig(ctx, mimirNamespace)
 					if err != nil {
 						return false
 					}
@@ -416,11 +416,11 @@ receivers:
 			// Verify template rendered correctly (later refs override earlier ones)
 			if updatedTenant.Status.SyncStatus == openawarenessv1beta1.SyncStatusSynced {
 				By("Verifying override behavior in Mimir API")
-				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, mimirNamespace)
+				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() bool {
-					config, _, err := mimirClient.GetAlertmanagerConfig(ctx)
+					config, _, err := mimirClient.GetAlertmanagerConfig(ctx, mimirNamespace)
 					if err != nil {
 						return false
 					}
@@ -654,11 +654,11 @@ receivers:
 
 			if updatedTenant.Status.SyncStatus == openawarenessv1beta1.SyncStatusSynced {
 				By("Verifying default values in Mimir API")
-				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, mimirNamespace)
+				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() bool {
-					config, _, err := mimirClient.GetAlertmanagerConfig(ctx)
+					config, _, err := mimirClient.GetAlertmanagerConfig(ctx, mimirNamespace)
 					if err != nil {
 						return false
 					}
@@ -760,11 +760,11 @@ receivers:
 
 			if updatedTenant.Status.SyncStatus == openawarenessv1beta1.SyncStatusSynced {
 				By("Verifying conditional sections in Mimir API")
-				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, mimirNamespace)
+				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() bool {
-					config, _, err := mimirClient.GetAlertmanagerConfig(ctx)
+					config, _, err := mimirClient.GetAlertmanagerConfig(ctx, mimirNamespace)
 					if err != nil {
 						return false
 					}

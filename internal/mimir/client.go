@@ -40,7 +40,6 @@ type Config struct {
 	User            string `yaml:"user"`
 	Key             string `yaml:"key"`
 	Address         string `yaml:"address"`
-	TenantID        string `yaml:"tenantid"`
 	TLS             tls.ClientConfig
 	UseLegacyRoutes bool              `yaml:"use_legacy_routes"`
 	MimirHTTPPrefix string            `yaml:"mimir_http_prefix"`
@@ -70,8 +69,7 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	}
 
 	logger.Info("New Mimir client created",
-		"address", cfg.Address,
-		"id", cfg.TenantID)
+		"address", cfg.Address)
 
 	client := http.Client{}
 
@@ -105,7 +103,6 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	return &Client{
 		user:         cfg.User,
 		key:          cfg.Key,
-		id:           cfg.TenantID,
 		endpoint:     endpoint,
 		Client:       client,
 		apiPath:      path,
@@ -124,7 +121,7 @@ func (r *Client) HealthCheck(ctx context.Context) error {
 	// List rules for a system namespace that should always be accessible
 	req := r.apiPath
 
-	res, err := r.doRequest(ctx, req, "GET", nil, -1)
+	res, err := r.doRequest(ctx, req, "GET", nil, -1, "")
 	if err != nil {
 		r.log.Error(err, "Health check failed")
 		return err
@@ -136,10 +133,10 @@ func (r *Client) HealthCheck(ctx context.Context) error {
 }
 
 // Query executes a PromQL query against the Mimir cluster.
-func (r *Client) Query(ctx context.Context, query string) (*http.Response, error) {
+func (r *Client) Query(ctx context.Context, query string, tenantID string) (*http.Response, error) {
 	req := fmt.Sprintf("/prometheus/api/v1/query?query=%s&time=%d", url.QueryEscape(query), time.Now().Unix())
 
-	res, err := r.doRequest(ctx, req, "GET", nil, -1)
+	res, err := r.doRequest(ctx, req, "GET", nil, -1, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +149,7 @@ func (r *Client) doRequest(
 	path, method string,
 	payload io.Reader,
 	contentLength int64,
+	tenantID string,
 ) (*http.Response, error) {
 	req, err := buildRequest(ctx, path, method, *r.endpoint, payload, contentLength)
 	if err != nil {
@@ -181,7 +179,12 @@ func (r *Client) doRequest(
 		req.Header.Add(k, v)
 	}
 
-	req.Header.Add(user.OrgIDHeaderName, r.id)
+	// Use provided tenant ID if given, otherwise fall back to client's default tenant ID
+	if tenantID != "" {
+		req.Header.Add(user.OrgIDHeaderName, tenantID)
+	} else {
+		req.Header.Add(user.OrgIDHeaderName, r.id)
+	}
 
 	r.log.Info("sending request to Grafana Mimir API",
 		"url", req.URL.String(),

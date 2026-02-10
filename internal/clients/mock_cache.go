@@ -12,8 +12,7 @@ import (
 
 // MockRulerClientCache is a mock implementation of RulerClientCache for testing
 type MockRulerClientCache struct {
-	clients        map[string]AwarenessClient
-	getClientError error
+	clients map[string]AwarenessClient
 }
 
 // Ensure MockRulerClientCache implements RulerClientCacheInterface
@@ -27,7 +26,7 @@ func NewMockRulerClientCache() *MockRulerClientCache {
 }
 
 // AddMimirClient simulates adding a Mimir client with validation
-func (m *MockRulerClientCache) AddMimirClient(_ context.Context, address string, name string, _ string) error {
+func (m *MockRulerClientCache) AddMimirClient(_ context.Context, address string, name string) error {
 	// Validate URL format
 	parsedURL, err := url.Parse(address)
 	if err != nil {
@@ -49,27 +48,24 @@ func (m *MockRulerClientCache) AddMimirClient(_ context.Context, address string,
 	return nil
 }
 
-// GetOrCreateMimirClient gets an existing client or creates a new one for the given tenant
+// GetOrCreateMimirClient gets an existing client or creates a new one.
+// One client handles all tenants for that Mimir instance via X-Scope-OrgID header.
 func (m *MockRulerClientCache) GetOrCreateMimirClient(
 	ctx context.Context,
 	address string,
 	clientName string,
-	tenantID string,
 ) (AwarenessClient, error) {
-	// Generate composite cache key using shared helper function
-	cacheKey := generateCacheKey(clientName, tenantID)
-
-	// Check if client already exists
-	if client, exists := m.clients[cacheKey]; exists {
+	// Check if client already exists using simple client name
+	if client, exists := m.clients[clientName]; exists {
 		return client, nil
 	}
 
-	// Create new client with tenant ID
-	if err := m.AddMimirClient(ctx, address, cacheKey, tenantID); err != nil {
-		return nil, fmt.Errorf("creating Mimir client for tenant %s: %w", tenantID, err)
+	// Create new client
+	if err := m.AddMimirClient(ctx, address, clientName); err != nil {
+		return nil, fmt.Errorf("creating Mimir client: %w", err)
 	}
 
-	return m.clients[cacheKey], nil
+	return m.clients[clientName], nil
 }
 
 // AddPromClient simulates adding a Prometheus client
@@ -83,22 +79,6 @@ func (m *MockRulerClientCache) RemoveClient(name string) {
 		return
 	}
 	delete(m.clients, name)
-}
-
-// GetClient retrieves a client from the cache
-func (m *MockRulerClientCache) GetClient(name string) (AwarenessClient, error) {
-	if m.getClientError != nil {
-		return nil, m.getClientError
-	}
-	if client, exists := m.clients[name]; exists {
-		return client, nil
-	}
-	return nil, errors.New("client not found")
-}
-
-// SetGetClientError sets an error to be returned by GetClient
-func (m *MockRulerClientCache) SetGetClientError(err error) {
-	m.getClientError = err
 }
 
 // SetClient manually sets a client in the cache for testing
@@ -140,7 +120,7 @@ func (m *MockAwarenessClient) SetDeleteAlertConfigError(err error) {
 }
 
 // CreateRuleGroup creates or updates a rule group in the mock client.
-func (m *MockAwarenessClient) CreateRuleGroup(_ context.Context, _ string, _ rulefmt.RuleGroup) error {
+func (m *MockAwarenessClient) CreateRuleGroup(_ context.Context, _ string, _ rulefmt.RuleGroup, _ string) error {
 	if m.createRuleGroupError != nil {
 		return m.createRuleGroupError
 	}
@@ -148,7 +128,7 @@ func (m *MockAwarenessClient) CreateRuleGroup(_ context.Context, _ string, _ rul
 }
 
 // DeleteRuleGroup deletes a rule group from the mock client.
-func (m *MockAwarenessClient) DeleteRuleGroup(_ context.Context, _, _ string) error {
+func (m *MockAwarenessClient) DeleteRuleGroup(_ context.Context, _, _ string, _ string) error {
 	if m.deleteRuleGroupError != nil {
 		return m.deleteRuleGroupError
 	}
@@ -156,22 +136,22 @@ func (m *MockAwarenessClient) DeleteRuleGroup(_ context.Context, _, _ string) er
 }
 
 // GetRuleGroup retrieves a rule group from the mock client.
-func (m *MockAwarenessClient) GetRuleGroup(_ context.Context, _, _ string) (*rulefmt.RuleGroup, error) {
+func (m *MockAwarenessClient) GetRuleGroup(_ context.Context, _, _ string, _ string) (*rulefmt.RuleGroup, error) {
 	return nil, nil
 }
 
 // ListRules lists all rules in a namespace from the mock client.
-func (m *MockAwarenessClient) ListRules(_ context.Context, _ string) (map[string][]rulefmt.RuleGroup, error) {
+func (m *MockAwarenessClient) ListRules(_ context.Context, _ string, _ string) (map[string][]rulefmt.RuleGroup, error) {
 	return nil, nil
 }
 
 // DeleteNamespace deletes a namespace from the mock client.
-func (m *MockAwarenessClient) DeleteNamespace(_ context.Context, _ string) error {
+func (m *MockAwarenessClient) DeleteNamespace(_ context.Context, _ string, _ string) error {
 	return nil
 }
 
 // CreateAlertmanagerConfig creates or updates an Alertmanager configuration in the mock client.
-func (m *MockAwarenessClient) CreateAlertmanagerConfig(_ context.Context, _ string, _ map[string]string) error {
+func (m *MockAwarenessClient) CreateAlertmanagerConfig(_ context.Context, _ string, _ map[string]string, _ string) error {
 	if m.createAlertConfigError != nil {
 		return m.createAlertConfigError
 	}
@@ -179,7 +159,7 @@ func (m *MockAwarenessClient) CreateAlertmanagerConfig(_ context.Context, _ stri
 }
 
 // DeleteAlermanagerConfig deletes the Alertmanager configuration from the mock client.
-func (m *MockAwarenessClient) DeleteAlermanagerConfig(_ context.Context) error {
+func (m *MockAwarenessClient) DeleteAlermanagerConfig(_ context.Context, _ string) error {
 	if m.deleteAlertConfigError != nil {
 		return m.deleteAlertConfigError
 	}
@@ -187,11 +167,11 @@ func (m *MockAwarenessClient) DeleteAlermanagerConfig(_ context.Context) error {
 }
 
 // GetAlertmanagerConfig retrieves the Alertmanager configuration from the mock client.
-func (m *MockAwarenessClient) GetAlertmanagerConfig(_ context.Context) (string, map[string]string, error) {
+func (m *MockAwarenessClient) GetAlertmanagerConfig(_ context.Context, _ string) (string, map[string]string, error) {
 	return "", nil, nil
 }
 
 // GetAlertmanagerStatus retrieves the Alertmanager status from the mock client.
-func (m *MockAwarenessClient) GetAlertmanagerStatus(_ context.Context) (string, error) {
+func (m *MockAwarenessClient) GetAlertmanagerStatus(_ context.Context, _ string) (string, error) {
 	return "", nil
 }

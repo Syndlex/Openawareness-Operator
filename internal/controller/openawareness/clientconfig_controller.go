@@ -3,7 +3,6 @@ package openawareness
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -74,71 +73,11 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		switch spec.Type {
 		case openawarenessv1beta1.Mimir:
-			// Extract tenant ID from annotation
-			tenantID := ""
-			if clientConfig.Annotations != nil {
-				tenantID = clientConfig.Annotations[utils.MimirTenantAnnotation]
-			}
-
-			// Check if tenant annotation is missing for Mimir client
-			if tenantID == "" {
-				logger.Info("Mimir ClientConfig is missing required tenant annotation",
-					"annotation", utils.MimirTenantAnnotation,
-					"name", clientConfig.Name)
-
-				// Update status with specific reason for missing annotation
-				message := fmt.Sprintf("Missing required annotation '%s' for Mimir client type", utils.MimirTenantAnnotation)
-				if statusErr := r.updateStatus(ctx, clientConfig,
-					openawarenessv1beta1.ConnectionStatusDisconnected,
-					metav1.ConditionFalse,
-					openawarenessv1beta1.ReasonMissingAnnotation,
-					message,
-					nil); statusErr != nil {
-					logger.Error(statusErr, "Failed to update status")
-					return ctrl.Result{}, statusErr
-				}
-				// Requeue to check again in case annotation is added
-				return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
-			}
-
-			// Check if client already exists - if so, don't recreate unless config changed
-			if existingClient, getErr := r.RulerClients.GetClient(clientConfig.Name); getErr == nil && existingClient != nil {
-				logger.V(1).Info("Client already exists in cache, skipping recreation",
-					"name", clientConfig.Name,
-					"namespace", clientConfig.Namespace)
-				// Client exists and is healthy, just update status to connected
-				if statusErr := r.updateStatus(ctx, clientConfig,
-					openawarenessv1beta1.ConnectionStatusConnected,
-					metav1.ConditionTrue,
-					openawarenessv1beta1.ReasonConnected,
-					"Successfully connected to endpoint",
-					nil); statusErr != nil {
-					logger.Error(statusErr, "Failed to update status")
-					return ctrl.Result{}, statusErr
-				}
-				return ctrl.Result{}, nil
-			}
-
-			err = r.RulerClients.AddMimirClient(ctx, spec.Address, clientConfig.Name, tenantID)
+			// Create client without tenant ID - tenant is passed per-request via namespace parameter
+			// in Mimir client methods (e.g., CreateRuleGroup, DeleteRuleGroup)
+			_, err = r.RulerClients.GetOrCreateMimirClient(ctx, spec.Address, clientConfig.Name)
 		case openawarenessv1beta1.Prometheus:
-			// Check if client already exists
-			if existingClient, getErr := r.RulerClients.GetClient(clientConfig.Name); getErr == nil && existingClient != nil {
-				logger.V(1).Info("Client already exists in cache, skipping recreation",
-					"name", clientConfig.Name,
-					"namespace", clientConfig.Namespace)
-				// Client exists, just update status
-				if statusErr := r.updateStatus(ctx, clientConfig,
-					openawarenessv1beta1.ConnectionStatusConnected,
-					metav1.ConditionTrue,
-					openawarenessv1beta1.ReasonConnected,
-					"Successfully connected to endpoint",
-					nil); statusErr != nil {
-					logger.Error(statusErr, "Failed to update status")
-					return ctrl.Result{}, statusErr
-				}
-				return ctrl.Result{}, nil
-			}
-
+			// Prometheus client support - currently not implemented
 			err = r.RulerClients.AddPromClient(ctx, spec.Address, clientConfig.Name)
 		}
 

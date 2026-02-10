@@ -151,13 +151,13 @@ receivers:
 				helper.VerifySuccessfulSync(updatedTenant)
 
 				By("Verifying configuration in Mimir API")
-				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, alertTenantName)
+				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 				Expect(err).NotTo(HaveOccurred())
-				err = helper.VerifyMimirAPIConfig(ctx, mimirClient, "default-receiver", timeout, interval)
+				err = helper.VerifyMimirAPIConfig(ctx, mimirClient, alertTenantName, "default-receiver", timeout, interval)
 				Expect(err).NotTo(HaveOccurred())
 
 				By("Verifying template in Mimir API")
-				err = helper.VerifyMimirAPITemplate(ctx, mimirClient, "default_template", timeout, interval)
+				err = helper.VerifyMimirAPITemplate(ctx, mimirClient, alertTenantName, "default_template", timeout, interval)
 				Expect(err).NotTo(HaveOccurred())
 			} else {
 				GinkgoWriter.Printf("Sync failed - expected if Mimir multitenant alertmanager is not enabled\n")
@@ -222,11 +222,11 @@ receivers:
 			// Verify Mimir API if sync succeeded
 			if updatedTenant.Status.SyncStatus == openawarenessv1beta1.SyncStatusSynced {
 				By("Verifying updated configuration in Mimir API")
-				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, alertTenantName)
+				mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 				Expect(err).NotTo(HaveOccurred())
 
 				Eventually(func() bool {
-					config, _, err := mimirClient.GetAlertmanagerConfig(ctx)
+					config, _, err := mimirClient.GetAlertmanagerConfig(ctx, alertTenantName)
 					if err != nil {
 						return false
 					}
@@ -296,9 +296,9 @@ receivers:
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying configuration was deleted from Mimir API")
-			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress, alertTenantName)
+			mimirClient, err := helper.CreateMimirClient(ctx, MimirLocalAddress)
 			Expect(err).NotTo(HaveOccurred())
-			err = helper.VerifyMimirAPIConfigDeleted(ctx, mimirClient, timeout, interval)
+			err = helper.VerifyMimirAPIConfigDeleted(ctx, mimirClient, alertTenantName, timeout, interval)
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

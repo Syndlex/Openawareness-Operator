@@ -14,34 +14,33 @@ import (
 // RulerClientCacheInterface defines the interface for managing ruler clients.
 // It provides methods to add, remove, and retrieve clients for both Mimir and Prometheus.
 type RulerClientCacheInterface interface {
-	AddMimirClient(ctx context.Context, address string, name string, tenantID string) error
+	AddMimirClient(ctx context.Context, address string, name string) error
 	AddPromClient(ctx context.Context, address string, name string) error
 	RemoveClient(name string)
-	GetClient(name string) (AwarenessClient, error)
 	GetOrCreateMimirClient(
 		ctx context.Context,
 		address string,
 		clientName string,
-		tenantID string,
 	) (AwarenessClient, error)
 }
 
 // AwarenessClient defines the interface for interacting with rule and alert APIs.
 // It abstracts the operations for both Mimir and Prometheus clients.
+// All methods accept a tenantID parameter for multi-tenant isolation.
 type AwarenessClient interface {
-	CreateRuleGroup(ctx context.Context, namespace string, rg rulefmt.RuleGroup) error
-	DeleteRuleGroup(ctx context.Context, namespace, groupName string) error
-	GetRuleGroup(ctx context.Context, namespace, groupName string) (*rulefmt.RuleGroup, error)
-	ListRules(ctx context.Context, namespace string) (map[string][]rulefmt.RuleGroup, error)
-	DeleteNamespace(ctx context.Context, namespace string) error
-	CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string) error
-	DeleteAlermanagerConfig(ctx context.Context) error
-	GetAlertmanagerConfig(ctx context.Context) (string, map[string]string, error)
-	GetAlertmanagerStatus(ctx context.Context) (string, error)
+	CreateRuleGroup(ctx context.Context, namespace string, rg rulefmt.RuleGroup, tenantID string) error
+	DeleteRuleGroup(ctx context.Context, namespace, groupName string, tenantID string) error
+	GetRuleGroup(ctx context.Context, namespace, groupName string, tenantID string) (*rulefmt.RuleGroup, error)
+	ListRules(ctx context.Context, namespace string, tenantID string) (map[string][]rulefmt.RuleGroup, error)
+	DeleteNamespace(ctx context.Context, namespace string, tenantID string) error
+	CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string, tenantID string) error
+	DeleteAlermanagerConfig(ctx context.Context, tenantID string) error
+	GetAlertmanagerConfig(ctx context.Context, tenantID string) (string, map[string]string, error)
+	GetAlertmanagerStatus(ctx context.Context, tenantID string) (string, error)
 }
 
 // RulerClientCache implements RulerClientCacheInterface and manages a cache of ruler clients.
-// It stores clients in a map keyed by client name (or client-tenant combination for multi-tenancy).
+// It stores clients in a map keyed by client name - one client per Mimir instance handles all tenants.
 type RulerClientCache struct {
 	clients map[string]AwarenessClient
 }
@@ -56,22 +55,17 @@ func NewRulerClientCache() *RulerClientCache {
 	}
 }
 
-// generateCacheKey creates a cache key for a Mimir client.
-// The key is a combination of clientName and tenantID to support multi-tenancy.
-// This ensures each tenant has its own isolated client instance.
-func generateCacheKey(clientName, tenantID string) string {
-	return fmt.Sprintf("%s-%s", clientName, tenantID)
-}
-
 // AddMimirClient creates a new Mimir client and adds it to the cache.
 // It performs a health check to verify connectivity before caching the client.
+// The client is created without a tenant ID - tenant isolation is achieved
+// via the X-Scope-OrgID header on each request (passed via tenantID parameter).
 // Returns an error if client creation or health check fails.
-func (e *RulerClientCache) AddMimirClient(ctx context.Context, address string, name string, tenantID string) error {
+func (e *RulerClientCache) AddMimirClient(ctx context.Context, address string, name string) error {
+	// Create client without tenant ID - tenant will be passed per-request via tenantID parameter
 	client, err := mimir.New(ctx, mimir.Config{
 		User:            "",
 		Key:             "",
 		Address:         address,
-		TenantID:        tenantID,
 		TLS:             tls.ClientConfig{},
 		UseLegacyRoutes: false,
 		MimirHTTPPrefix: "",
@@ -91,30 +85,26 @@ func (e *RulerClientCache) AddMimirClient(ctx context.Context, address string, n
 	return nil
 }
 
-// GetOrCreateMimirClient gets an existing client or creates a new one for the given tenant.
-// The cache key is a combination of clientName and tenantID to support multi-tenancy.
-// This ensures each tenant has its own isolated client instance.
+// GetOrCreateMimirClient gets an existing client or creates a new one.
+// The cache key is simply the clientName - one client handles all tenants for that Mimir instance.
+// Tenant isolation is achieved via the X-Scope-OrgID header on each request (namespace parameter).
 // Returns the cached or newly created client, or an error if creation fails.
 func (e *RulerClientCache) GetOrCreateMimirClient(
 	ctx context.Context,
 	address string,
 	clientName string,
-	tenantID string,
 ) (AwarenessClient, error) {
-	// Generate composite cache key using helper function
-	cacheKey := generateCacheKey(clientName, tenantID)
-
-	// Check if client already exists
-	if client, exists := e.clients[cacheKey]; exists {
+	// Check if client already exists using simple client name
+	if client, exists := e.clients[clientName]; exists {
 		return client, nil
 	}
 
-	// Create new client with tenant ID
-	if err := e.AddMimirClient(ctx, address, cacheKey, tenantID); err != nil {
-		return nil, fmt.Errorf("creating Mimir client for tenant %s: %w", tenantID, err)
+	// Create new client without tenant ID - tenant passed per-request
+	if err := e.AddMimirClient(ctx, address, clientName); err != nil {
+		return nil, fmt.Errorf("creating Mimir client: %w", err)
 	}
 
-	return e.clients[cacheKey], nil
+	return e.clients[clientName], nil
 }
 
 // RemoveClient removes a client from the cache by name.
@@ -124,15 +114,6 @@ func (e *RulerClientCache) RemoveClient(name string) {
 		return
 	}
 	delete(e.clients, name)
-}
-
-// GetClient retrieves a client from the cache by name.
-// Returns an error if the client is not found in the cache.
-func (e *RulerClientCache) GetClient(name string) (AwarenessClient, error) {
-	if client, exists := e.clients[name]; exists {
-		return client, nil
-	}
-	return nil, errors.New("client not found")
 }
 
 // AddPromClient would create a Prometheus client and add it to the cache.

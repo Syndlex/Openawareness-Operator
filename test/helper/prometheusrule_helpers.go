@@ -141,21 +141,21 @@ func UpdatePrometheusRuleGroups(
 func VerifyMimirRuleGroup(
 	ctx context.Context,
 	mimirClient *mimir.Client,
-	namespace, groupName string,
+	tenantID, namespace, groupName string,
 	timeout, interval time.Duration,
 ) error {
-	return verifyMimirRuleGroupCondition(ctx, mimirClient, namespace, groupName, timeout, interval, func(group *rulefmt.RuleGroup) bool { return true }, "Rule group '%s' should exist in Mimir namespace '%s'")
+	return verifyMimirRuleGroupCondition(ctx, mimirClient, tenantID, namespace, groupName, timeout, interval, func(group *rulefmt.RuleGroup) bool { return true }, "Rule group '%s' should exist in Mimir namespace '%s'")
 }
 
 // VerifyMimirRuleGroupDeleted verifies that a rule group has been deleted from Mimir API.
 func VerifyMimirRuleGroupDeleted(
 	ctx context.Context,
 	mimirClient *mimir.Client,
-	namespace, groupName string,
+	tenantID, namespace, groupName string,
 	timeout, interval time.Duration,
 ) error {
 	Eventually(func() bool {
-		ruleSet, err := mimirClient.ListRules(ctx, namespace)
+		ruleSet, err := mimirClient.ListRules(ctx, namespace, tenantID)
 		if err != nil {
 			// If we get a 404, the namespace has no rules, which means our group is deleted
 			return true
@@ -182,17 +182,17 @@ func VerifyMimirRuleGroupDeleted(
 func VerifyMimirRuleGroupContent(
 	ctx context.Context,
 	mimirClient *mimir.Client,
-	namespace, groupName string,
+	tenantID, namespace, groupName string,
 	expectedRuleCount int,
 	timeout, interval time.Duration,
 ) error {
-	return verifyMimirRuleGroupCondition(ctx, mimirClient, namespace, groupName, timeout, interval, func(group *rulefmt.RuleGroup) bool { return len(group.Rules) == expectedRuleCount }, "Rule group '%s' should have %d rules in Mimir namespace '%s'")
+	return verifyMimirRuleGroupCondition(ctx, mimirClient, tenantID, namespace, groupName, timeout, interval, func(group *rulefmt.RuleGroup) bool { return len(group.Rules) == expectedRuleCount }, "Rule group '%s' should have %d rules in Mimir namespace '%s'")
 }
 
 // verifyMimirRuleGroupCondition is a helper that reduces duplication in Mimir verification functions.
-func verifyMimirRuleGroupCondition(ctx context.Context, mimirClient *mimir.Client, namespace, groupName string, timeout, interval time.Duration, condition func(*rulefmt.RuleGroup) bool, messageFormat string) error {
+func verifyMimirRuleGroupCondition(ctx context.Context, mimirClient *mimir.Client, tenantID, namespace, groupName string, timeout, interval time.Duration, condition func(*rulefmt.RuleGroup) bool, messageFormat string) error {
 	Eventually(func() bool {
-		ruleSet, err := mimirClient.ListRules(ctx, namespace)
+		ruleSet, err := mimirClient.ListRules(ctx, namespace, tenantID)
 		if err != nil {
 			return false
 		}
@@ -208,7 +208,7 @@ func verifyMimirRuleGroupCondition(ctx context.Context, mimirClient *mimir.Clien
 			}
 		}
 		return false
-	}, timeout, interval).Should(BeTrue(), messageFormat, namespace)
+	}, timeout, interval).Should(BeTrue(), messageFormat, groupName, namespace)
 
 	return nil
 }

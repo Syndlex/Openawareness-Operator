@@ -22,8 +22,9 @@ type configCompat struct {
 
 // CreateAlertmanagerConfig creates or updates the Alertmanager configuration for the tenant.
 // It packages the configuration and templates into the required format and sends it to the Mimir API.
+// The tenantID parameter specifies which tenant this configuration belongs to.
 // Returns an error if marshaling or the API request fails.
-func (r *Client) CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string) error {
+func (r *Client) CreateAlertmanagerConfig(ctx context.Context, cfg string, templates map[string]string, tenantID string) error {
 	payload, err := yaml.Marshal(&configCompat{
 		TemplateFiles:      templates,
 		AlertmanagerConfig: cfg,
@@ -32,7 +33,7 @@ func (r *Client) CreateAlertmanagerConfig(ctx context.Context, cfg string, templ
 		return err
 	}
 
-	res, err := r.doRequest(ctx, alertmanagerAPI, "POST", bytes.NewBuffer(payload), int64(len(payload)))
+	res, err := r.doRequest(ctx, alertmanagerAPI, "POST", bytes.NewBuffer(payload), int64(len(payload)), tenantID)
 	if err != nil {
 		return err
 	}
@@ -45,10 +46,11 @@ func (r *Client) CreateAlertmanagerConfig(ctx context.Context, cfg string, templ
 }
 
 // DeleteAlermanagerConfig deletes the tenant's Alertmanager configuration.
+// The tenantID parameter specifies which tenant's configuration to delete.
 // Returns an error if the API request fails.
 // Returns nil if the configuration doesn't exist (404).
-func (r *Client) DeleteAlermanagerConfig(ctx context.Context) error {
-	res, err := r.doRequest(ctx, alertmanagerAPI, "DELETE", nil, -1)
+func (r *Client) DeleteAlermanagerConfig(ctx context.Context, tenantID string) error {
+	res, err := r.doRequest(ctx, alertmanagerAPI, "DELETE", nil, -1, tenantID)
 	if err != nil {
 		// If the config doesn't exist, that's fine - deletion succeeded
 		if errors.Is(err, ErrResourceNotFound) {
@@ -66,10 +68,11 @@ func (r *Client) DeleteAlermanagerConfig(ctx context.Context) error {
 }
 
 // GetAlertmanagerConfig retrieves the tenant's Alertmanager configuration from Mimir.
+// The tenantID parameter specifies which tenant's configuration to retrieve.
 // Returns the configuration string, template files map, and an error if the request or unmarshaling fails.
 // Returns empty strings and nil map when no configuration exists (404 Not Found).
-func (r *Client) GetAlertmanagerConfig(ctx context.Context) (string, map[string]string, error) {
-	res, err := r.doRequest(ctx, alertmanagerAPI, "GET", nil, -1)
+func (r *Client) GetAlertmanagerConfig(ctx context.Context, tenantID string) (string, map[string]string, error) {
+	res, err := r.doRequest(ctx, alertmanagerAPI, "GET", nil, -1, tenantID)
 	if err != nil {
 		// Check if the error is ErrResourceNotFound (404) - this is expected when no config exists yet
 		// Use errors.Is to handle wrapped errors correctly
@@ -102,9 +105,10 @@ func (r *Client) GetAlertmanagerConfig(ctx context.Context) (string, map[string]
 }
 
 // GetAlertmanagerStatus retrieves the status of the Alertmanager for the tenant.
+// The tenantID parameter specifies which tenant's status to retrieve.
 // Returns the raw status response as a string, or an error if the request fails.
-func (r *Client) GetAlertmanagerStatus(ctx context.Context) (string, error) {
-	res, err := r.doRequest(ctx, alertmanagerAPIStatus, "GET", nil, -1)
+func (r *Client) GetAlertmanagerStatus(ctx context.Context, tenantID string) (string, error) {
+	res, err := r.doRequest(ctx, alertmanagerAPIStatus, "GET", nil, -1, tenantID)
 	if err != nil {
 		log.Debugln("failed to get alertmanager status")
 		return "", err
