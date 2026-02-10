@@ -117,9 +117,9 @@ var _ = BeforeSuite(func() {
 	_, err = helper.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to build controller image")
 
-	// Tag with docker.io/library prefix for microk8s import
+	// Tag with ghcr.io/syndlex/ prefix for microk8s import
 	// microk8s containerd expects this naming convention
-	microk8sImageName := "docker.io/library/" + imageName
+	microk8sImageName := "ghcr.io/syndlex/" + imageName
 	cmd = exec.Command("docker", "tag", imageName, microk8sImageName)
 	_, err = helper.Run(cmd)
 	Expect(err).NotTo(HaveOccurred(), "Failed to tag controller image")

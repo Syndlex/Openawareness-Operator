@@ -9,8 +9,13 @@ import (
 
 // ClientConfigSpec defines the desired state of ClientConfig
 type ClientConfigSpec struct {
+	// Address is the URL of the Mimir or Prometheus instance
+	// +kubebuilder:validation:Required
 	Address string `json:"address,omitempty"`
 
+	// Type specifies whether this is a Mimir or Prometheus instance
+	// +kubebuilder:validation:Enum=mimir;prometheus
+	// +kubebuilder:validation:Required
 	Type ClientType `json:"type,omitempty"`
 }
 
@@ -83,8 +88,6 @@ const (
 	ReasonServerError = "ServerError"
 	// ReasonConnected indicates successful connection
 	ReasonConnected = "Connected"
-	// ReasonMissingAnnotation indicates a required annotation is missing
-	ReasonMissingAnnotation = "MissingAnnotation"
 )
 
 // +kubebuilder:object:root=true

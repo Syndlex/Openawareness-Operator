@@ -40,10 +40,18 @@ spec:
             description: ClientConfigSpec defines the desired state of ClientConfig
             properties:
               address:
+                description: Address is the URL of the Mimir or Prometheus instance
                 type: string
               type:
-                description: ClientType defines the type of client (Mimir or Prometheus)
+                description: Type specifies whether this is a Mimir or Prometheus
+                  instance
+                enum:
+                - mimir
+                - prometheus
                 type: string
+            required:
+            - address
+            - type
             type: object
           status:
             description: ClientConfigStatus defines the observed state of ClientConfig
