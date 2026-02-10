@@ -1,3 +1,4 @@
+//nolint:revive // utils is a standard package name for utilities
 package utils
 
 import (
