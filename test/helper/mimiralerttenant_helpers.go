@@ -278,16 +278,21 @@ func VerifyMimirAPITemplate(
 }
 
 // VerifyMimirAPIConfigDeleted verifies that configuration was deleted from Mimir API.
+// When a config is deleted, GetAlertmanagerConfig returns empty strings with nil error (not a 404 error).
 func VerifyMimirAPIConfigDeleted(
 	ctx context.Context,
 	mimirClient *mimir.Client,
 	timeout, interval time.Duration,
 ) error {
-	Eventually(func() error {
-		_, _, err := mimirClient.GetAlertmanagerConfig(ctx)
-		// Should return an error (404 or similar) after deletion
-		return err
-	}, timeout, interval).Should(HaveOccurred(), "Configuration should be deleted from Mimir API")
+	Eventually(func() bool {
+		config, templates, err := mimirClient.GetAlertmanagerConfig(ctx)
+		if err != nil {
+			// Unexpected error
+			return false
+		}
+		// Config should be empty after deletion
+		return config == "" && (templates == nil || len(templates) == 0)
+	}, timeout, interval).Should(BeTrue(), "Configuration should be deleted from Mimir API")
 
 	return nil
 }

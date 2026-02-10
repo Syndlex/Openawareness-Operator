@@ -56,6 +56,13 @@ func NewRulerClientCache() *RulerClientCache {
 	}
 }
 
+// generateCacheKey creates a cache key for a Mimir client.
+// The key is a combination of clientName and tenantID to support multi-tenancy.
+// This ensures each tenant has its own isolated client instance.
+func generateCacheKey(clientName, tenantID string) string {
+	return fmt.Sprintf("%s-%s", clientName, tenantID)
+}
+
 // AddMimirClient creates a new Mimir client and adds it to the cache.
 // It performs a health check to verify connectivity before caching the client.
 // Returns an error if client creation or health check fails.
@@ -94,8 +101,8 @@ func (e *RulerClientCache) GetOrCreateMimirClient(
 	clientName string,
 	tenantID string,
 ) (AwarenessClient, error) {
-	// Create composite key: clientName + tenantID
-	cacheKey := fmt.Sprintf("%s-%s", clientName, tenantID)
+	// Generate composite cache key using helper function
+	cacheKey := generateCacheKey(clientName, tenantID)
 
 	// Check if client already exists
 	if client, exists := e.clients[cacheKey]; exists {

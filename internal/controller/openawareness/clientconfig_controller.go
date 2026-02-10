@@ -72,16 +72,6 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// Attempt to create and validate client connection
 		spec := clientConfig.Spec
 
-		// Check if client already exists in cache - if so, remove it first to ensure refresh
-		// This handles cases where the client type, address, or tenant has changed
-		if existingClient, getErr := r.RulerClients.GetClient(clientConfig.Name); getErr == nil && existingClient != nil {
-			logger.Info("Existing client found in cache, removing for refresh",
-				"name", clientConfig.Name,
-				"namespace", clientConfig.Namespace,
-				"type", spec.Type)
-			r.RulerClients.RemoveClient(clientConfig.Name)
-		}
-
 		switch spec.Type {
 		case openawarenessv1beta1.Mimir:
 			// Extract tenant ID from annotation
@@ -111,8 +101,44 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
 			}
 
+			// Check if client already exists - if so, don't recreate unless config changed
+			if existingClient, getErr := r.RulerClients.GetClient(clientConfig.Name); getErr == nil && existingClient != nil {
+				logger.V(1).Info("Client already exists in cache, skipping recreation",
+					"name", clientConfig.Name,
+					"namespace", clientConfig.Namespace)
+				// Client exists and is healthy, just update status to connected
+				if statusErr := r.updateStatus(ctx, clientConfig,
+					openawarenessv1beta1.ConnectionStatusConnected,
+					metav1.ConditionTrue,
+					openawarenessv1beta1.ReasonConnected,
+					"Successfully connected to endpoint",
+					nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status")
+					return ctrl.Result{}, statusErr
+				}
+				return ctrl.Result{}, nil
+			}
+
 			err = r.RulerClients.AddMimirClient(ctx, spec.Address, clientConfig.Name, tenantID)
 		case openawarenessv1beta1.Prometheus:
+			// Check if client already exists
+			if existingClient, getErr := r.RulerClients.GetClient(clientConfig.Name); getErr == nil && existingClient != nil {
+				logger.V(1).Info("Client already exists in cache, skipping recreation",
+					"name", clientConfig.Name,
+					"namespace", clientConfig.Namespace)
+				// Client exists, just update status
+				if statusErr := r.updateStatus(ctx, clientConfig,
+					openawarenessv1beta1.ConnectionStatusConnected,
+					metav1.ConditionTrue,
+					openawarenessv1beta1.ReasonConnected,
+					"Successfully connected to endpoint",
+					nil); statusErr != nil {
+					logger.Error(statusErr, "Failed to update status")
+					return ctrl.Result{}, statusErr
+				}
+				return ctrl.Result{}, nil
+			}
+
 			err = r.RulerClients.AddPromClient(ctx, spec.Address, clientConfig.Name)
 		}
 

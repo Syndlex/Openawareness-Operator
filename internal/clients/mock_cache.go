@@ -56,8 +56,8 @@ func (m *MockRulerClientCache) GetOrCreateMimirClient(
 	clientName string,
 	tenantID string,
 ) (AwarenessClient, error) {
-	// Create composite key: clientName + tenantID
-	cacheKey := fmt.Sprintf("%s-%s", clientName, tenantID)
+	// Generate composite cache key using shared helper function
+	cacheKey := generateCacheKey(clientName, tenantID)
 
 	// Check if client already exists
 	if client, exists := m.clients[cacheKey]; exists {

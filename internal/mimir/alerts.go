@@ -4,9 +4,10 @@ package mimir
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 
-	"github.com/pkg/errors"
+	pkgerrors "github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
@@ -45,9 +46,15 @@ func (r *Client) CreateAlertmanagerConfig(ctx context.Context, cfg string, templ
 
 // DeleteAlermanagerConfig deletes the tenant's Alertmanager configuration.
 // Returns an error if the API request fails.
+// Returns nil if the configuration doesn't exist (404).
 func (r *Client) DeleteAlermanagerConfig(ctx context.Context) error {
 	res, err := r.doRequest(ctx, alertmanagerAPI, "DELETE", nil, -1)
 	if err != nil {
+		// If the config doesn't exist, that's fine - deletion succeeded
+		if errors.Is(err, ErrResourceNotFound) {
+			log.Debugln("alertmanager config already deleted or not found (404)")
+			return nil
+		}
 		return err
 	}
 
@@ -60,14 +67,22 @@ func (r *Client) DeleteAlermanagerConfig(ctx context.Context) error {
 
 // GetAlertmanagerConfig retrieves the tenant's Alertmanager configuration from Mimir.
 // Returns the configuration string, template files map, and an error if the request or unmarshaling fails.
+// Returns empty strings and nil map when no configuration exists (404 Not Found).
 func (r *Client) GetAlertmanagerConfig(ctx context.Context) (string, map[string]string, error) {
 	res, err := r.doRequest(ctx, alertmanagerAPI, "GET", nil, -1)
 	if err != nil {
-		log.Debugln("no alert config present in response")
+		// Check if the error is ErrResourceNotFound (404) - this is expected when no config exists yet
+		// Use errors.Is to handle wrapped errors correctly
+		if errors.Is(err, ErrResourceNotFound) {
+			log.Debugln("alertmanager config not found (404), returning empty config")
+			return "", nil, nil
+		}
+		log.Debugln("error getting alert config")
 		return "", nil, err
 	}
 
 	defer func() { _ = res.Body.Close() }()
+
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
 		return "", nil, err
@@ -80,7 +95,7 @@ func (r *Client) GetAlertmanagerConfig(ctx context.Context) (string, map[string]
 			"body": string(body),
 		}).Debugln("failed to unmarshal rule group from response")
 
-		return "", nil, errors.Wrap(err, "unable to unmarshal response")
+		return "", nil, pkgerrors.Wrap(err, "unable to unmarshal response")
 	}
 
 	return compat.AlertmanagerConfig, compat.TemplateFiles, nil
