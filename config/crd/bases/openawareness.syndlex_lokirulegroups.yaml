@@ -1,0 +1,211 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  name: lokirulegroups.openawareness.syndlex
+spec:
+  group: openawareness.syndlex
+  names:
+    kind: LokiRuleGroup
+    listKind: LokiRuleGroupList
+    plural: lokirulegroups
+    singular: lokirulegroup
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.tenant
+      name: Tenant
+      type: string
+    - jsonPath: .status.resolvedLokiNamespace
+      name: Loki NS
+      type: string
+    - jsonPath: .status.resolvedPrometheusNamespace
+      name: Prom NS
+      type: string
+    - jsonPath: .status.syncStatus
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: |-
+          LokiRuleGroup defines one or more LogQL/PromQL alerting or recording rule groups
+          that the controller deploys to a Loki Ruler and/or a Mimir/Prometheus Ruler instance.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: LokiRuleGroupSpec defines the desired state of LokiRuleGroup.
+            properties:
+              groups:
+                description: |-
+                  Groups contains the rule groups to deploy. Expressions should use LogQL
+                  for Loki targets and PromQL for Mimir/Prometheus targets.
+                items:
+                  description: RuleGroup represents a single rule group (name + list of rules).
+                  properties:
+                    interval:
+                      description: Interval is the evaluation interval (e.g. "1m", "5m").
+                      type: string
+                    name:
+                      description: Name is the unique name of this rule group.
+                      type: string
+                    rules:
+                      description: Rules is the list of alerting or recording rules.
+                      items:
+                        description: LokiRule represents a single alerting or recording rule.
+                        properties:
+                          alert:
+                            description: Alert is the name of the alert (mutually exclusive with record).
+                            type: string
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations are key-value pairs providing additional information.
+                            type: object
+                          expr:
+                            description: Expr is the LogQL or PromQL expression.
+                            type: string
+                          for:
+                            description: For defines how long the condition must be true before firing.
+                            type: string
+                          keepFiringFor:
+                            description: KeepFiringFor defines how long an alert keeps firing after recovery.
+                            type: string
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Labels are key-value pairs attached to the rule.
+                            type: object
+                          record:
+                            description: Record is the metric name to record into (mutually exclusive with alert).
+                            type: string
+                        required:
+                        - expr
+                        type: object
+                      minItems: 1
+                      type: array
+                  required:
+                  - name
+                  - rules
+                  type: object
+                minItems: 1
+                type: array
+              lokiClientRef:
+                description: |-
+                  LokiClientRef is the name of a ClientConfig that points to a Loki instance.
+                  When set, rule groups are pushed to Loki via the Loki Ruler API.
+                type: string
+              lokiNamespace:
+                description: |-
+                  LokiNamespace overrides the Loki Ruler namespace for this resource.
+                  Fallback priority: spec.lokiNamespace > annotation openawareness.syndlex/loki-namespace > metadata.namespace
+                type: string
+              mimirClientRef:
+                description: |-
+                  MimirClientRef is the name of a ClientConfig that points to a Mimir/Prometheus instance.
+                  When set, rule groups are also pushed to Mimir via the Prometheus Ruler API.
+                type: string
+              prometheusNamespace:
+                description: |-
+                  PrometheusNamespace overrides the Mimir/Prometheus Ruler namespace for this resource.
+                  Fallback priority: spec.prometheusNamespace > annotation openawareness.syndlex/prometheus-namespace > metadata.namespace
+                type: string
+              tenant:
+                description: |-
+                  Tenant is the X-Scope-OrgID value for multi-tenancy.
+                  Fallback priority: spec.tenant > annotation openawareness.syndlex/tenant > "main"
+                type: string
+            required:
+            - groups
+            type: object
+          status:
+            description: LokiRuleGroupStatus defines the observed state of LokiRuleGroup.
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations.
+                items:
+                  description: Condition contains details for one aspect of the current state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: LastTransitionTime is the last time the condition transitioned.
+                      format: date-time
+                      type: string
+                    message:
+                      description: Message is a human readable message indicating details about the transition.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: Reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: Status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: Type of condition in CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              errorMessage:
+                description: ErrorMessage contains the last error message if a sync failed.
+                type: string
+              lastSyncTime:
+                description: LastSyncTime is the timestamp of the last successful sync.
+                format: date-time
+                type: string
+              resolvedLokiNamespace:
+                description: ResolvedLokiNamespace is the effective Loki Ruler namespace after priority resolution.
+                type: string
+              resolvedPrometheusNamespace:
+                description: ResolvedPrometheusNamespace is the effective Mimir/Prometheus Ruler namespace.
+                type: string
+              activeLokiClientRef:
+                description: ActiveLokiClientRef is the lokiClientRef used in the last successful sync. Used to detect client changes.
+                type: string
+              activeMimirClientRef:
+                description: ActiveMimirClientRef is the mimirClientRef used in the last successful sync. Used to detect client changes.
+                type: string
+              syncStatus:
+                description: SyncStatus is a human-readable summary ("Synced", "Failed", "Pending").
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

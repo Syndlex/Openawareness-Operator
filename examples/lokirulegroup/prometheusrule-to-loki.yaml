@@ -1,0 +1,48 @@
+# PrometheusRule mit Loki-Routing via ClientConfig.
+#
+# Mit dem neuen einheitlichen Annotations-Modell zeigt openawareness.io/client-name
+# auf EINE ClientConfig. Der Controller liest spec.type und routet entsprechend:
+#
+#   spec.type: mimir      → Mimir/Prometheus Ruler API
+#   spec.type: prometheus → Mimir/Prometheus Ruler API
+#   spec.type: loki       → Loki Ruler API
+#
+# Für Multi-Backend (Mimir + Loki gleichzeitig) verwende stattdessen LokiRuleGroup.
+#
+# Tenant-Auflösung für Loki:
+#   openawareness.io/mimir-tenant  →  metadata.namespace
+---
+apiVersion: openawareness.syndlex/v1beta1
+kind: ClientConfig
+metadata:
+  name: loki-main
+  namespace: monitoring
+spec:
+  address: http://loki.monitoring.svc.cluster.local:3100
+  type: loki
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: myapp-loki-rules
+  namespace: monitoring
+  annotations:
+    # Zeigt auf eine ClientConfig vom Typ "loki" — wird an den Loki Ruler gesendet.
+    openawareness.io/client-name: loki-main
+    # Optional: Tenant für Loki. Standard: metadata.namespace ("monitoring")
+    openawareness.io/mimir-tenant: main
+spec:
+  groups:
+    - name: myapp-alerts
+      rules:
+        - alert: MyAppHighErrorRate
+          # LogQL-Expression — funktioniert im Loki Ruler
+          expr: |
+            sum(rate({app="myapp", namespace="production"} |= "error" [5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "High error rate in myapp"
+            description: "Error rate exceeded 10/s for 5 minutes."

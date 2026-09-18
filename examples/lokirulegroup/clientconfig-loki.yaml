@@ -1,0 +1,11 @@
+# ClientConfig for the Loki backend.
+# Referenced by LokiRuleGroup.spec.lokiClientRef: loki-main
+apiVersion: openawareness.syndlex/v1beta1
+kind: ClientConfig
+metadata:
+  name: loki-main
+  namespace: monitoring
+spec:
+  # Address of the Loki backend that exposes the Ruler API.
+  address: http://loki-backend.telemetry.svc.cluster.local:3100
+  type: mimir   # reuses the mimir client type; Loki speaks the same Ruler HTTP API shape

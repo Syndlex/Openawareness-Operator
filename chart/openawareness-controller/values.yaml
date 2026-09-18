@@ -4,6 +4,9 @@ controllerManager:
     - --metrics-bind-address=:8443
     - --leader-elect
     - --health-probe-bind-address=:8081
+    # -- Log output format. Allowed values: "json" (structured, for production/Loki)
+    # or "console" (human-readable, for local development).
+    logFormat: json
     containerSecurityContext:
       allowPrivilegeEscalation: false
       capabilities:

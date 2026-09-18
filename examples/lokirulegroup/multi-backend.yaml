@@ -1,0 +1,69 @@
+# Multi-backend example — pushes the same rule groups to both Loki AND Mimir/Prometheus.
+#
+# Use case: you want the same alerting rules evaluated in both the log-based
+# (Loki) and metric-based (Mimir) rulers, e.g. during a migration or for
+# cross-signal alerting.
+#
+# Namespace resolution:
+#   - Loki Ruler namespace:  spec.lokiNamespace  = "shared-loki-rules"
+#   - Mimir Ruler namespace: spec.prometheusNamespace = "shared-mimir-rules"
+#   Both differ from the Kubernetes namespace "ops-team", showing independent routing.
+#
+# Tenant:
+#   Resolved from annotation (lower priority than spec.tenant) to demonstrate the
+#   annotation fallback. Remove the annotation and set spec.tenant instead if you
+#   prefer the spec-level override.
+apiVersion: openawareness.syndlex/v1beta1
+kind: LokiRuleGroup
+metadata:
+  name: cross-signal-alerts
+  namespace: ops-team
+  annotations:
+    # Tenant fallback via annotation (used when spec.tenant is empty).
+    openawareness.syndlex/tenant: "main"
+spec:
+  # spec.tenant takes priority over the annotation above; leave empty to use annotation.
+  # tenant: main
+
+  # Loki backend (log-based ruler)
+  lokiClientRef: loki-main
+  lokiNamespace: shared-loki-rules
+
+  # Mimir/Prometheus backend (metric-based ruler)
+  mimirClientRef: mimir-main
+  prometheusNamespace: shared-mimir-rules
+
+  groups:
+    - name: infrastructure-alerts
+      interval: 2m
+      rules:
+        # Loki alert: high Kubernetes event error rate (LogQL).
+        - alert: K8sEventErrors
+          expr: |
+            sum(rate({job="kubernetes-events"} |= "Failed" [5m])) by (namespace) > 5
+          for: 5m
+          labels:
+            severity: warning
+            domain: infrastructure
+          annotations:
+            summary: "High Kubernetes Failed event rate in {{ $labels.namespace }}"
+            description: "More than 5 Failed events/s in namespace {{ $labels.namespace }}."
+
+    - name: slo-alerts
+      interval: 1m
+      rules:
+        # Mimir alert: SLO burn rate from pre-recorded metric (PromQL).
+        # This rule is only meaningful on the Mimir side; Loki will accept it
+        # but the metric series must exist there too if evaluated by Loki.
+        - alert: SloBurnRateHigh
+          expr: |
+            (
+              job:loki_http_error_ratio:rate5m{namespace="production"} > 0.01
+            )
+          for: 15m
+          labels:
+            severity: critical
+            slo: http-availability
+          annotations:
+            summary: "SLO burn rate too high in production"
+            description: "HTTP error ratio exceeds 1% for 15 minutes."

@@ -13,13 +13,13 @@ type ClientConfigSpec struct {
 	// +kubebuilder:validation:Required
 	Address string `json:"address,omitempty"`
 
-	// Type specifies whether this is a Mimir or Prometheus instance
-	// +kubebuilder:validation:Enum=mimir;prometheus
+	// Type specifies whether this is a Mimir, Prometheus, or Loki instance
+	// +kubebuilder:validation:Enum=mimir;prometheus;loki
 	// +kubebuilder:validation:Required
 	Type ClientType `json:"type,omitempty"`
 }
 
-// ClientType defines the type of client (Mimir or Prometheus)
+// ClientType defines the type of client (Mimir, Prometheus, or Loki)
 type ClientType string
 
 const (
@@ -27,6 +27,8 @@ const (
 	Mimir ClientType = "mimir"
 	// Prometheus represents a Prometheus client
 	Prometheus ClientType = "prometheus"
+	// Loki represents a Grafana Loki client
+	Loki ClientType = "loki"
 )
 
 // ConnectionStatus represents the connection state of a ClientConfig

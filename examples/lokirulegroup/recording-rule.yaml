@@ -1,0 +1,52 @@
+# Recording rule example — persists aggregated metrics from log streams into Loki metrics.
+#
+# Loki recording rules write the result of a metric query into a new metric series,
+# reducing query cost for dashboards and alerts that run the same aggregation repeatedly.
+#
+# Namespace resolution:
+#   spec.lokiNamespace: "platform-rules"  →  this object (in namespace "team-a") writes
+#   its rules into the Loki Ruler namespace "platform-rules", shared across teams.
+#   This demonstrates cross-namespace routing.
+apiVersion: openawareness.syndlex/v1beta1
+kind: LokiRuleGroup
+metadata:
+  name: platform-recording-rules
+  # Kubernetes namespace of the CRD object.
+  namespace: team-a
+  annotations:
+    # Optional: override Loki Ruler namespace via annotation (lower priority than spec field).
+    # openawareness.syndlex/loki-namespace: platform-rules
+spec:
+  tenant: main
+
+  # Override the Loki Ruler namespace — rules land in "platform-rules" regardless
+  # of the Kubernetes namespace "team-a" this CR lives in.
+  lokiNamespace: platform-rules
+
+  lokiClientRef: loki-main
+
+  groups:
+    - name: http-request-rates
+      interval: 5m
+      rules:
+        # Recording rule: pre-compute the per-app request rate over 5 minutes.
+        - record: job:loki_http_requests_total:rate5m
+          expr: |
+            sum by (app, namespace) (
+              rate({job="nginx"} | logfmt | status != "" [5m])
+            )
+          labels:
+            aggregation: "rate5m"
+
+        # Recording rule: pre-compute error ratio per app.
+        - record: job:loki_http_error_ratio:rate5m
+          expr: |
+            sum by (app, namespace) (
+              rate({job="nginx"} | logfmt | status=~"5.." [5m])
+            )
+            /
+            sum by (app, namespace) (
+              rate({job="nginx"} | logfmt [5m])
+            )
+          labels:
+            aggregation: "rate5m"

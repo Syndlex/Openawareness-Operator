@@ -33,6 +33,11 @@ var ctx context.Context
 var cancel context.CancelFunc
 var k8sManager ctrl.Manager
 
+// Suite-level Loki mock shared across all envtest-backed Loki tests.
+// Reset between individual tests via BeforeEach in the test file.
+var suiteLokiMock *clients.MockLokiClient
+var suiteLokiCache *clients.MockLokiClientCache
+
 func TestControllers(t *testing.T) {
 	RegisterFailHandler(Fail)
 
@@ -55,7 +60,7 @@ var _ = BeforeSuite(func() {
 		// Note that you must have the required binaries setup under the bin directory to perform
 		// the tests directly. When we run make test it will be setup and used automatically.
 		BinaryAssetsDirectory: filepath.Join("..", "..", "..", "bin", "k8s",
-			fmt.Sprintf("1.31.0-%s-%s", runtime.GOOS, runtime.GOARCH)),
+			fmt.Sprintf("1.34.1-%s-%s", runtime.GOOS, runtime.GOARCH)),
 	}
 
 	var err error
@@ -87,6 +92,18 @@ var _ = BeforeSuite(func() {
 		Client:       k8sManager.GetClient(),
 		RulerClients: clients.NewMockRulerClientCache(),
 		Scheme:       k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("setting up LokiRuleGroup controller with mock Loki cache")
+	suiteLokiMock = clients.NewMockLokiClient()
+	suiteLokiCache = clients.NewMockLokiClientCache()
+	suiteLokiCache.SetClient("loki-main", suiteLokiMock)
+	err = (&LokiRuleGroupReconciler{
+		Client:      k8sManager.GetClient(),
+		Scheme:      k8sManager.GetScheme(),
+		LokiClients: suiteLokiCache,
+		MimirClient: clients.NewMockRulerClientCache(),
 	}).SetupWithManager(k8sManager)
 	Expect(err).NotTo(HaveOccurred())
 

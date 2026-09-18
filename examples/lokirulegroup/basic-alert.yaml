@@ -1,0 +1,53 @@
+# Basic LokiRuleGroup example — sends rules to Loki only.
+#
+# Prerequisites:
+#   - A ClientConfig named "loki-main" must exist in the same namespace,
+#     pointing to the Loki backend (spec.address: http://loki-backend.telemetry.svc.cluster.local:3100).
+#
+# Namespace resolution (Loki Ruler namespace):
+#   spec.lokiNamespace is omitted here, so the Kubernetes namespace "monitoring"
+#   is used as the Loki Ruler namespace.
+#
+# Tenant resolution:
+#   spec.tenant is set explicitly to "main".
+apiVersion: openawareness.syndlex/v1beta1
+kind: LokiRuleGroup
+metadata:
+  name: myapp-loki-alerts
+  namespace: monitoring
+spec:
+  # Loki tenant (X-Scope-OrgID header)
+  tenant: main
+
+  # Reference to a ClientConfig that points to Loki.
+  lokiClientRef: loki-main
+
+  groups:
+    - name: myapp-error-alerts
+      # Evaluation interval for all rules in this group.
+      interval: 1m
+      rules:
+        # Alert rule: fires when the error rate over 5 min exceeds 10 lines/s.
+        - alert: MyAppHighErrorRate
+          expr: |
+            sum(rate({app="myapp", namespace="production"} |= "error" [5m])) > 10
+          for: 5m
+          labels:
+            severity: warning
+            team: platform
+          annotations:
+            summary: "High error rate in myapp"
+            description: "Error log rate exceeded 10/s for more than 5 minutes."
+            runbook_url: "https://wiki.example.com/runbooks/myapp-high-error-rate"
+
+        # Alert rule: fires when no logs are received for 10 minutes (dead man's switch).
+        - alert: MyAppNoLogs
+          expr: |
+            sum(rate({app="myapp", namespace="production"} [10m])) == 0
+          for: 10m
+          labels:
+            severity: critical
+            team: platform
+          annotations:
+            summary: "myapp is not producing any logs"
+            description: "No log lines received from myapp in the last 10 minutes."

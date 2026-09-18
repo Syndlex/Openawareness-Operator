@@ -50,6 +50,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var logFormat string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -61,11 +62,21 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	opts := zap.Options{
-		Development: true,
-	}
+	flag.StringVar(&logFormat, "log-format", "json",
+		`Log output format. Allowed values: "json" (structured, for production/Loki) or "console" (human-readable, for development).`)
+	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	switch logFormat {
+	case "console":
+		opts.Development = true // console encoder + stack traces
+	case "json", "":
+		opts.Development = false // JSON encoder, suitable for log aggregation
+	default:
+		setupLog.Info("Unknown --log-format value, falling back to json", "value", logFormat)
+		opts.Development = false
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -143,9 +154,11 @@ func main() {
 	}
 
 	clientCache := clients.NewRulerClientCache()
+	lokiClientCache := clients.NewLokiClientCache()
 
 	if err = (&monitoringcoreoscomcontroller.PrometheusRulesReconciler{
 		RulerClients: clientCache,
+		LokiClients:  lokiClientCache,
 		Client:       mgr.GetClient(),
 		Scheme:       mgr.GetScheme(),
 		Recorder:     mgr.GetEventRecorderFor("prometheusrules-controller"),
@@ -167,6 +180,15 @@ func main() {
 		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MimirAlertTenant")
+		os.Exit(1)
+	}
+	if err = (&openawarenesscontroller.LokiRuleGroupReconciler{
+		LokiClients: lokiClientCache,
+		MimirClient: clientCache,
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "LokiRuleGroup")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

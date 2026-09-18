@@ -47,6 +47,7 @@ spec:
                 enum:
                 - mimir
                 - prometheus
+                - loki
                 type: string
             required:
             - address

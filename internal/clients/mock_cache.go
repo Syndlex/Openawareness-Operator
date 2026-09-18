@@ -92,6 +92,7 @@ type MockAwarenessClient struct {
 	deleteRuleGroupError   error
 	createAlertConfigError error
 	deleteAlertConfigError error
+	deleteCalls            int
 }
 
 // NewMockAwarenessClient creates a new mock awareness client
@@ -129,10 +130,16 @@ func (m *MockAwarenessClient) CreateRuleGroup(_ context.Context, _ string, _ rul
 
 // DeleteRuleGroup deletes a rule group from the mock client.
 func (m *MockAwarenessClient) DeleteRuleGroup(_ context.Context, _, _ string, _ string) error {
+	m.deleteCalls++
 	if m.deleteRuleGroupError != nil {
 		return m.deleteRuleGroupError
 	}
 	return nil
+}
+
+// DeleteCalls returns the number of times DeleteRuleGroup was called.
+func (m *MockAwarenessClient) DeleteCalls() int {
+	return m.deleteCalls
 }
 
 // GetRuleGroup retrieves a rule group from the mock client.
