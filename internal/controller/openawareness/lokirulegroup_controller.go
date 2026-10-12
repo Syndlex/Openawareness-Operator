@@ -144,6 +144,8 @@ func (r *LokiRuleGroupReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 }
 
 // syncToLoki pushes all desired rule groups to the Loki Ruler and prunes stale ones.
+//
+//nolint:dupl // syncToMimir is structurally identical but uses a different client interface.
 func (r *LokiRuleGroupReconciler) syncToLoki(
 	ctx context.Context,
 	res *openawarenessv1beta1.LokiRuleGroup,
@@ -172,6 +174,8 @@ func (r *LokiRuleGroupReconciler) syncToLoki(
 }
 
 // syncToMimir pushes all desired rule groups to the Mimir Ruler and prunes stale ones.
+//
+//nolint:dupl // syncToLoki is structurally identical but uses a different client interface.
 func (r *LokiRuleGroupReconciler) syncToMimir(
 	ctx context.Context,
 	res *openawarenessv1beta1.LokiRuleGroup,

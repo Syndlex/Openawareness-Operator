@@ -58,7 +58,7 @@ func (c *LokiClientCache) GetOrCreateLokiClient(
 	}
 
 	if err := cl.HealthCheck(ctx); err != nil {
-		return nil, fmt.Errorf("Loki client %q health check failed: %w", name, err)
+		return nil, fmt.Errorf("loki client %q health check failed: %w", name, err)
 	}
 
 	c.clients[name] = cl
