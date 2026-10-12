@@ -65,16 +65,25 @@ func New(ctx context.Context, cfg Config) (*Client, error) {
 	}, nil
 }
 
+// healthCheckTenant is a placeholder tenant ID used during the health check.
+// Loki requires a non-empty X-Scope-OrgID header on every request; the actual
+// value does not matter here because we only verify connectivity.
+const healthCheckTenant = "health"
+
 // HealthCheck verifies connectivity by listing all rule namespaces.
 func (c *Client) HealthCheck(ctx context.Context) error {
 	c.log.V(1).Info("Performing Loki health check")
 
-	resp, err := c.doRequest(ctx, rulerAPIPath, http.MethodGet, nil, -1, "")
-	if err != nil {
+	resp, err := c.doRequest(ctx, rulerAPIPath, http.MethodGet, nil, -1, healthCheckTenant)
+	if err != nil && !errors.Is(err, ErrResourceNotFound) {
 		c.log.Error(err, "Loki health check failed")
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() {
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+	}()
 
 	c.log.Info("Loki health check successful", "status", resp.Status)
 	return nil
