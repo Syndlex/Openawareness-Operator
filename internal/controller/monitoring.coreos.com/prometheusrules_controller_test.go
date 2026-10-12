@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
 	"github.com/syndlex/openawareness-controller/internal/clients"
 	"github.com/syndlex/openawareness-controller/internal/controller/utils"
@@ -462,6 +463,156 @@ var _ = Describe("PrometheusRules Controller", func() {
 			Expect(converted).To(HaveLen(2))
 			Expect(converted[0].Name).To(Equal("alerts"))
 			Expect(converted[1].Name).To(Equal("recordings"))
+		})
+
+		It("should convert RuleGroup.Interval to model.Duration", func() {
+			interval := monitoringv1.Duration("5m")
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:     "with-interval",
+					Interval: &interval,
+					Rules:    []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Interval).To(Equal(model.Duration(5 * 60 * 1e9)))
+		})
+
+		It("should use zero Interval when RuleGroup.Interval is nil", func() {
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:  "no-interval",
+					Rules: []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Interval).To(Equal(model.Duration(0)))
+		})
+
+		It("should convert Rule.For to model.Duration", func() {
+			forDuration := monitoringv1.Duration("10m")
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name: "with-for",
+					Rules: []monitoringv1.Rule{
+						{Alert: "AlertWithFor", Expr: intstr.FromString("up == 0"), For: &forDuration},
+					},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Rules[0].For).To(Equal(model.Duration(10 * 60 * 1e9)))
+		})
+
+		It("should use zero For when Rule.For is nil", func() {
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name: "no-for",
+					Rules: []monitoringv1.Rule{
+						{Alert: "AlertNoFor", Expr: intstr.FromString("up == 0")},
+					},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Rules[0].For).To(Equal(model.Duration(0)))
+		})
+
+		It("should convert Rule.KeepFiringFor to model.Duration", func() {
+			kff := monitoringv1.NonEmptyDuration("2h")
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name: "with-keep-firing",
+					Rules: []monitoringv1.Rule{
+						{Alert: "AlertKFF", Expr: intstr.FromString("up == 0"), KeepFiringFor: &kff},
+					},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Rules[0].KeepFiringFor).To(Equal(model.Duration(2 * 3600 * 1e9)))
+		})
+
+		It("should use zero KeepFiringFor when Rule.KeepFiringFor is nil", func() {
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name: "no-keep-firing",
+					Rules: []monitoringv1.Rule{
+						{Alert: "AlertNoKFF", Expr: intstr.FromString("up == 0")},
+					},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Rules[0].KeepFiringFor).To(Equal(model.Duration(0)))
+		})
+
+		It("should convert RuleGroup.QueryOffset to *model.Duration", func() {
+			offset := monitoringv1.Duration("1m")
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:        "with-query-offset",
+					QueryOffset: &offset,
+					Rules:       []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].QueryOffset).NotTo(BeNil())
+			Expect(*converted[0].QueryOffset).To(Equal(model.Duration(60 * 1e9)))
+		})
+
+		It("should use nil QueryOffset when RuleGroup.QueryOffset is nil", func() {
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:  "no-query-offset",
+					Rules: []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].QueryOffset).To(BeNil())
+		})
+
+		It("should convert RuleGroup.Limit", func() {
+			limit := 42
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:  "with-limit",
+					Limit: &limit,
+					Rules: []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Limit).To(Equal(42))
+		})
+
+		It("should use zero Limit when RuleGroup.Limit is nil", func() {
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:  "no-limit",
+					Rules: []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Limit).To(Equal(0))
+		})
+
+		It("should copy RuleGroup.Labels", func() {
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:   "with-labels",
+					Labels: map[string]string{"team": "platform", "env": "prod"},
+					Rules:  []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Labels).To(Equal(map[string]string{"team": "platform", "env": "prod"}))
+		})
+
+		It("should use nil Labels when RuleGroup.Labels is nil", func() {
+			groups := []monitoringv1.RuleGroup{
+				{
+					Name:  "no-labels",
+					Rules: []monitoringv1.Rule{{Alert: "A", Expr: intstr.FromString("up == 0")}},
+				},
+			}
+			converted := convert(groups)
+			Expect(converted[0].Labels).To(BeNil())
 		})
 	})
 })

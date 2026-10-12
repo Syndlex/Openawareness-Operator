@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
 	"github.com/syndlex/openawareness-controller/internal/clients"
@@ -401,9 +402,12 @@ func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
 			rules = append(rules, newRule(rule))
 		}
 		result = append(result, rulefmt.RuleGroup{
-			Name: g.Name,
-			// Interval: g.Interval, // TODO: requires model.Duration conversion
-			Rules: rules,
+			Name:        g.Name,
+			Labels:      g.Labels,
+			Interval:    convertDuration(g.Interval),
+			QueryOffset: convertDurationPtr(g.QueryOffset),
+			Limit:       convertLimit(g.Limit),
+			Rules:       rules,
 		})
 	}
 	return result
@@ -412,12 +416,62 @@ func convert(groups []monitoringv1.RuleGroup) []rulefmt.RuleGroup {
 // newRule converts a single PrometheusRule to a rulefmt.Rule.
 func newRule(rule monitoringv1.Rule) rulefmt.Rule {
 	return rulefmt.Rule{
-		Record:      rule.Record,
-		Alert:       rule.Alert,
-		Expr:        rule.Expr.String(),
-		Labels:      rule.Labels,
-		Annotations: rule.Annotations,
+		Record:        rule.Record,
+		Alert:         rule.Alert,
+		Expr:          rule.Expr.String(),
+		Labels:        rule.Labels,
+		Annotations:   rule.Annotations,
+		For:           convertDuration(rule.For),
+		KeepFiringFor: convertNonEmptyDuration(rule.KeepFiringFor),
 	}
+}
+
+// convertDuration converts a *monitoringv1.Duration (Prometheus-format string, e.g. "5m")
+// to a model.Duration. Returns 0 if d is nil, empty, or unparseable.
+func convertDuration(d *monitoringv1.Duration) model.Duration {
+	if d == nil || *d == "" {
+		return 0
+	}
+	md, err := model.ParseDuration(string(*d))
+	if err != nil {
+		return 0
+	}
+	return md
+}
+
+// convertNonEmptyDuration converts a *monitoringv1.NonEmptyDuration to a model.Duration.
+// Returns 0 if d is nil, empty, or unparseable.
+func convertNonEmptyDuration(d *monitoringv1.NonEmptyDuration) model.Duration {
+	if d == nil || *d == "" {
+		return 0
+	}
+	md, err := model.ParseDuration(string(*d))
+	if err != nil {
+		return 0
+	}
+	return md
+}
+
+// convertDurationPtr converts a *monitoringv1.Duration to a *model.Duration.
+// Returns nil if d is nil, empty, or unparseable.
+func convertDurationPtr(d *monitoringv1.Duration) *model.Duration {
+	if d == nil || *d == "" {
+		return nil
+	}
+	md, err := model.ParseDuration(string(*d))
+	if err != nil {
+		return nil
+	}
+	return &md
+}
+
+// convertLimit converts a *int limit to the int expected by rulefmt.
+// Returns 0 (no limit) if l is nil.
+func convertLimit(l *int) int {
+	if l == nil {
+		return 0
+	}
+	return *l
 }
 
 // SetupWithManager sets up the controller with the Manager.
