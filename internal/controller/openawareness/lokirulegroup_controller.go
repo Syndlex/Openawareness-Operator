@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/model/rulefmt"
 	openawarenessv1beta1 "github.com/syndlex/openawareness-controller/api/openawareness/v1beta1"
 	"github.com/syndlex/openawareness-controller/internal/clients"
-	"github.com/syndlex/openawareness-controller/internal/loki"
 	"github.com/syndlex/openawareness-controller/internal/controller/utils"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/syndlex/openawareness-controller/internal/loki"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -428,34 +428,36 @@ func convertGroups(groups []openawarenessv1beta1.RuleGroup) []rulefmt.RuleGroup 
 	for _, g := range groups {
 		rules := make([]rulefmt.Rule, 0, len(g.Rules))
 		for _, r := range g.Rules {
-			var forDur, keepDur metav1.Duration
-			if r.For != "" {
-				// Best-effort parse; validation webhook can enforce this later.
-				_ = forDur.UnmarshalJSON([]byte(`"` + r.For + `"`))
-			}
-			if r.KeepFiringFor != "" {
-				_ = keepDur.UnmarshalJSON([]byte(`"` + r.KeepFiringFor + `"`))
-			}
 			rules = append(rules, rulefmt.Rule{
 				Alert:         r.Alert,
 				Record:        r.Record,
 				Expr:          r.Expr,
 				Labels:        r.Labels,
 				Annotations:   r.Annotations,
+				For:           parseDurationString(r.For),
+				KeepFiringFor: parseDurationString(r.KeepFiringFor),
 			})
 		}
-
-		rg := rulefmt.RuleGroup{
-			Name:  g.Name,
-			Rules: rules,
-		}
-		if g.Interval != "" {
-			// rulefmt.RuleGroup.Interval is a model.Duration; pass as string via YAML round-trip.
-			// The Loki/Mimir API accepts the string form directly.
-		}
-		out = append(out, rg)
+		out = append(out, rulefmt.RuleGroup{
+			Name:     g.Name,
+			Interval: parseDurationString(g.Interval),
+			Rules:    rules,
+		})
 	}
 	return out
+}
+
+// parseDurationString converts a plain duration string (e.g. "5m", "1h") to a
+// model.Duration. Returns 0 if s is empty or unparseable.
+func parseDurationString(s string) model.Duration {
+	if s == "" {
+		return 0
+	}
+	md, err := model.ParseDuration(s)
+	if err != nil {
+		return 0
+	}
+	return md
 }
 
 // groupNames returns the set of rule group names from a slice.
