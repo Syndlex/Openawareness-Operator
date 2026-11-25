@@ -3,6 +3,7 @@ package openawareness
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +21,7 @@ import (
 type ClientConfigReconciler struct {
 	k8sClient.Client
 	RulerClients clients.RulerClientCacheInterface
+	LokiClients  clients.LokiClientCacheInterface
 	Scheme       *runtime.Scheme
 }
 
@@ -53,6 +55,9 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// Cleanup: remove client from cache
 		logger.Info("Removing client from cache", "name", clientConfig.Name, "namespace", clientConfig.Namespace)
 		r.RulerClients.RemoveClient(clientConfig.Name)
+		if r.LokiClients != nil {
+			r.LokiClients.RemoveLokiClient(clientConfig.Name)
+		}
 		return nil
 	})
 
@@ -76,6 +81,13 @@ func (r *ClientConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			// Create client without tenant ID - tenant is passed per-request via namespace parameter
 			// in Mimir client methods (e.g., CreateRuleGroup, DeleteRuleGroup)
 			_, err = r.RulerClients.GetOrCreateMimirClient(ctx, spec.Address, clientConfig.Name)
+		case openawarenessv1beta1.Loki:
+			// Loki uses its own ruler API path (/loki/api/v1/rules), so it needs its own client.
+			if r.LokiClients == nil {
+				err = errors.New("loki client cache is not configured")
+			} else {
+				_, err = r.LokiClients.GetOrCreateLokiClient(ctx, spec.Address, clientConfig.Name)
+			}
 		case openawarenessv1beta1.Prometheus:
 			// Prometheus client support - currently not implemented
 			err = r.RulerClients.AddPromClient(ctx, spec.Address, clientConfig.Name)

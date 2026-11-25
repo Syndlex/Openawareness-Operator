@@ -168,6 +168,7 @@ func main() {
 	}
 	if err = (&openawarenesscontroller.ClientConfigReconciler{
 		RulerClients: clientCache,
+		LokiClients:  lokiClientCache,
 		Client:       mgr.GetClient(),
 		Scheme:       mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {

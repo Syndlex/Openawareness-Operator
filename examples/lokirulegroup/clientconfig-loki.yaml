@@ -8,4 +8,4 @@ metadata:
 spec:
   # Address of the Loki backend that exposes the Ruler API.
   address: http://loki-backend.telemetry.svc.cluster.local:3100
-  type: mimir   # reuses the mimir client type; Loki speaks the same Ruler HTTP API shape
+  type: loki
